@@ -20,6 +20,9 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 
+import org.h2.server.web.JakartaWebServlet;
+import org.springframework.boot.web.servlet.ServletRegistrationBean;
+
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -92,6 +95,18 @@ public class SecurityConfig {
 		// JwtDecoder configured to use the Authorization Server's JWK Set URI so
 		// tokens issued by the server can be validated by the client/resource logic.
 		return NimbusJwtDecoder.withJwkSetUri("http://localhost:8085/oauth2/jwks").build();
+	}
+
+	@Bean
+	public ServletRegistrationBean<JakartaWebServlet> h2ConsoleServlet() {
+		// Register the H2 Console JakartaWebServlet so the /h2-console UI works.
+		// Spring Boot 4.1.0-SNAPSHOT (used by this demo) does not include the
+		// H2ConsoleAutoConfiguration class, so the spring.h2.console.enabled
+		// property is silently ignored — this bean replaces that auto-configuration.
+		JakartaWebServlet h2Servlet = new JakartaWebServlet();
+		ServletRegistrationBean<JakartaWebServlet> bean = new ServletRegistrationBean<>(h2Servlet, "/h2-console/*");
+		bean.setLoadOnStartup(1);
+		return bean;
 	}
 
 }
