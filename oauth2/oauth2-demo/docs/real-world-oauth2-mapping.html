@@ -259,7 +259,45 @@
     padding: 20px;
     overflow-x: auto;
   }
-  .diagram-container svg { display: block; margin: 0 auto; }
+  .diagram-container svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .diagram-container { position: relative; }
+
+  /* Interactive elements */
+  .dnode, .darrow { cursor: pointer; outline: none; }
+  .dnode { transition: opacity .15s ease; }
+  .darrow { transition: opacity .15s ease; }
+  .dnode-box { transition: stroke-width .15s ease, filter .15s ease; }
+  .arrow-visible { transition: stroke-width .15s ease, filter .15s ease; }
+  .arrow-hit { stroke: transparent; stroke-width: 16; fill: none; pointer-events: stroke; }
+  .dstep-dot { transition: r .15s ease; }
+
+  /* Dim everything except the active element/group */
+  #protocolSvg.has-active .dnode,
+  #protocolSvg.has-active .darrow { opacity: .3; }
+  #protocolSvg.has-active .dnode.is-active,
+  #protocolSvg.has-active .darrow.is-active { opacity: 1; }
+
+  .dnode.is-active .dnode-box {
+    stroke-width: 2.5;
+    filter: drop-shadow(0 0 4px rgba(37,99,235,.45));
+  }
+  .darrow.is-active .arrow-visible {
+    stroke-width: 3.5;
+    filter: drop-shadow(0 0 3px rgba(37,99,235,.35));
+  }
+  .darrow.is-active text { fill: #1e293b; font-weight: 700; }
+  .darrow.is-active .dstep-dot { r: 4.5; }
+
+  .diagram-info {
+    margin-top: 14px;
+    padding: 14px 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    min-height: 58px;
+  }
+  .diagram-info strong { display: block; font-size: .92rem; color: #0b3d91; margin-bottom: 4px; }
+  .diagram-info p { font-size: .85rem; color: #4a5568; margin: 0; }
 
   /* ── Conclusion ── */
   .conclusion-box {
@@ -584,9 +622,9 @@ client_id=<span class="hl">738...apps.googleusercontent.com</span></pre>
       <div class="step-num">8</div>
       <div class="step-body">
         <h4>Interactive Protocol Diagram</h4>
-        <p style="font-size:.88rem;color:#4a5568;margin-bottom:12px;">Hover over the components and arrows to explore the full Authorization Code + PKCE flow.</p>
-        <div class="diagram-container">
-          <svg width="920" height="440" viewBox="0 0 920 440" xmlns="http://www.w3.org/2000/svg">
+        <p style="font-size:.88rem;color:#4a5568;margin-bottom:12px;">Hover (or tap, or Tab-focus) over the components and arrows to explore the full Authorization Code + PKCE flow.</p>
+        <div class="diagram-container" id="diagramContainer">
+          <svg id="protocolSvg" width="920" height="440" viewBox="0 0 920 440" xmlns="http://www.w3.org/2000/svg">
             <defs>
               <marker id="arrowBlue" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
                 <polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/>
@@ -609,86 +647,137 @@ client_id=<span class="hl">738...apps.googleusercontent.com</span></pre>
             <line x1="740" y1="50" x2="740" y2="400" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4,4"/>
 
             <!-- Participants -->
-            <g filter="url(#shadow)">
-              <rect x="40" y="56" width="110" height="44" rx="8" fill="#fff" stroke="#64748b" stroke-width="1.5"/>
+            <g class="dnode" tabindex="0" filter="url(#shadow)"
+               data-title="Browser (User Agent)"
+               data-desc="The end user's browser. It never handles client secrets or raw tokens directly — it's only redirected between URLs and holds the session cookie for the demo app.">
+              <rect class="dnode-box" x="40" y="56" width="110" height="44" rx="8" fill="#fff" stroke="#64748b" stroke-width="1.5"/>
               <text x="95" y="76" font-family="Segoe UI,sans-serif" font-size="13" font-weight="700" fill="#1e293b" text-anchor="middle">Browser</text>
               <text x="95" y="91" font-family="Segoe UI,sans-serif" font-size="10" fill="#64748b" text-anchor="middle">User Agent</text>
             </g>
 
-            <g filter="url(#shadow)">
-              <rect x="220" y="56" width="110" height="44" rx="8" fill="#fff" stroke="#2563eb" stroke-width="1.5"/>
+            <g class="dnode" tabindex="0" filter="url(#shadow)"
+               data-title="React SPA (OAuth2 Client)"
+               data-desc="A public client using PKCE. It kicks off the authorization request, generates the code_verifier / code_challenge pair, and later exchanges the auth code for tokens.">
+              <rect class="dnode-box" x="220" y="56" width="110" height="44" rx="8" fill="#fff" stroke="#2563eb" stroke-width="1.5"/>
               <text x="275" y="76" font-family="Segoe UI,sans-serif" font-size="13" font-weight="700" fill="#1e293b" text-anchor="middle">React SPA</text>
               <text x="275" y="91" font-family="Segoe UI,sans-serif" font-size="10" fill="#64748b" text-anchor="middle">OAuth2 Client</text>
             </g>
 
-            <g filter="url(#shadow)">
-              <rect x="420" y="56" width="110" height="44" rx="8" fill="#fff" stroke="#059669" stroke-width="1.5"/>
+            <g class="dnode" tabindex="0" filter="url(#shadow)"
+               data-title="Authorization Server (/oauth2/*)"
+               data-desc="Spring Authorization Server. Handles login and consent, issues the one-time authorization code, and exchanges it for signed JWT access/ID/refresh tokens.">
+              <rect class="dnode-box" x="420" y="56" width="110" height="44" rx="8" fill="#fff" stroke="#059669" stroke-width="1.5"/>
               <text x="475" y="76" font-family="Segoe UI,sans-serif" font-size="13" font-weight="700" fill="#1e293b" text-anchor="middle">Auth Server</text>
               <text x="475" y="91" font-family="Segoe UI,sans-serif" font-size="10" fill="#64748b" text-anchor="middle">/oauth2/*</text>
             </g>
 
-            <g filter="url(#shadow)">
-              <rect x="630" y="56" width="110" height="44" rx="8" fill="#fff" stroke="#64748b" stroke-width="1.5"/>
+            <g class="dnode" tabindex="0" filter="url(#shadow)"
+               data-title="Resource Server (/user)"
+               data-desc="The protected API. It validates the incoming Bearer JWT against the Authorization Server's JWK Set before returning the authenticated user's profile.">
+              <rect class="dnode-box" x="630" y="56" width="110" height="44" rx="8" fill="#fff" stroke="#64748b" stroke-width="1.5"/>
               <text x="685" y="76" font-family="Segoe UI,sans-serif" font-size="13" font-weight="700" fill="#1e293b" text-anchor="middle">Resource</text>
               <text x="685" y="91" font-family="Segoe UI,sans-serif" font-size="10" fill="#64748b" text-anchor="middle">Server /user</text>
             </g>
 
             <!-- Step labels -->
-            <g font-family="Segoe UI,sans-serif" font-size="10" fill="#94a3b8">
-              <!-- Step 1 -->
-              <rect x="165" y="130" width="6" height="6" rx="3" fill="#2563eb"/>
-              <text x="175" y="135">① Click "Login with OAuth2"</text>
+            <g class="darrow" tabindex="0" data-step="1"
+               data-title="① Click &quot;Login with OAuth2&quot;"
+               data-desc="The user clicks the login button in the browser, which asks the React SPA to begin the OAuth2 flow.">
+              <rect class="dstep-dot" x="165" y="130" width="6" height="6" rx="3" fill="#2563eb"/>
+              <text x="175" y="135" font-family="Segoe UI,sans-serif" font-size="10" fill="#94a3b8">① Click "Login with OAuth2"</text>
+            </g>
 
-              <!-- Step 2 -->
-              <rect x="165" y="170" width="6" height="6" rx="3" fill="#2563eb"/>
-              <text x="175" y="175">② Redirect /oauth2/authorize (PKCE)</text>
+            <g class="darrow" tabindex="0" data-step="2"
+               data-title="② Redirect /oauth2/authorize (PKCE)"
+               data-desc="The SPA redirects the browser to /oauth2/authorize with response_type=code, a code_challenge, and code_challenge_method=S256.">
+              <rect class="dstep-dot" x="165" y="170" width="6" height="6" rx="3" fill="#2563eb"/>
+              <text x="175" y="175" font-family="Segoe UI,sans-serif" font-size="10" fill="#94a3b8">② Redirect /oauth2/authorize (PKCE)</text>
+            </g>
 
-              <!-- Step 3 -->
-              <rect x="165" y="210" width="6" height="6" rx="3" fill="#059669"/>
-              <text x="175" y="215">③ Login + Consent page</text>
+            <g class="darrow" tabindex="0" data-step="3"
+               data-title="③ Login + Consent page"
+               data-desc="The Authorization Server serves a login form (and consent screen) back to the browser.">
+              <rect class="dstep-dot" x="165" y="210" width="6" height="6" rx="3" fill="#059669"/>
+              <text x="175" y="215" font-family="Segoe UI,sans-serif" font-size="10" fill="#94a3b8">③ Login + Consent page</text>
+            </g>
 
-              <!-- Step 4 -->
-              <rect x="165" y="250" width="6" height="6" rx="3" fill="#059669"/>
-              <text x="175" y="255">④ POST credentials / consent</text>
+            <g class="darrow" tabindex="0" data-step="4"
+               data-title="④ POST credentials / consent"
+               data-desc="The browser POSTs the user's credentials and consent decision back to the Authorization Server.">
+              <rect class="dstep-dot" x="165" y="250" width="6" height="6" rx="3" fill="#059669"/>
+              <text x="175" y="255" font-family="Segoe UI,sans-serif" font-size="10" fill="#94a3b8">④ POST credentials / consent</text>
+            </g>
 
-              <!-- Step 5 -->
-              <rect x="165" y="290" width="6" height="6" rx="3" fill="#2563eb"/>
-              <text x="175" y="295">⑤ Redirect with auth code</text>
+            <g class="darrow" tabindex="0" data-step="5"
+               data-title="⑤ Redirect with auth code"
+               data-desc="The Authorization Server redirects the browser back to the SPA's redirect_uri, carrying a one-time authorization code.">
+              <rect class="dstep-dot" x="165" y="290" width="6" height="6" rx="3" fill="#2563eb"/>
+              <text x="175" y="295" font-family="Segoe UI,sans-serif" font-size="10" fill="#94a3b8">⑤ Redirect with auth code</text>
+            </g>
 
-              <!-- Step 6 -->
-              <rect x="165" y="330" width="6" height="6" rx="3" fill="#2563eb"/>
-              <text x="175" y="335">⑥ POST /oauth2/token (code + verifier)</text>
+            <g class="darrow" tabindex="0" data-step="6"
+               data-title="⑥ POST /oauth2/token (code + verifier)"
+               data-desc="The SPA calls /oauth2/token with the authorization code and code_verifier as proof of PKCE — no client secret is needed for a public client.">
+              <rect class="dstep-dot" x="165" y="330" width="6" height="6" rx="3" fill="#2563eb"/>
+              <text x="175" y="335" font-family="Segoe UI,sans-serif" font-size="10" fill="#94a3b8">⑥ POST /oauth2/token (code + verifier)</text>
+            </g>
 
-              <!-- Step 7 -->
-              <rect x="165" y="370" width="6" height="6" rx="3" fill="#059669"/>
-              <text x="175" y="375">⑦ GET /user (Bearer token)</text>
+            <g class="darrow" tabindex="0" data-step="7"
+               data-title="⑦ GET /user (Bearer token)"
+               data-desc="The SPA calls the Resource Server's /user endpoint with Authorization: Bearer &lt;access_token&gt; to fetch the authenticated user's profile.">
+              <rect class="dstep-dot" x="165" y="370" width="6" height="6" rx="3" fill="#059669"/>
+              <text x="175" y="375" font-family="Segoe UI,sans-serif" font-size="10" fill="#94a3b8">⑦ GET /user (Bearer token)</text>
             </g>
 
             <!-- Arrows -->
-            <g stroke-width="2" fill="none">
+            <g fill="none">
               <!-- 1: Browser -> React SPA -->
-              <line x1="80" y1="100" x2="210" y2="120" stroke="#2563eb" marker-end="url(#arrowBlue)"/>
+              <g class="darrow" tabindex="0" data-step="1" data-title="① Click &quot;Login with OAuth2&quot;" data-desc="The user clicks the login button in the browser, which asks the React SPA to begin the OAuth2 flow.">
+                <line class="arrow-hit" x1="80" y1="100" x2="210" y2="120"/>
+                <line class="arrow-visible" x1="80" y1="100" x2="210" y2="120" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+              </g>
 
               <!-- 2: React SPA -> AS -->
-              <line x1="330" y1="120" x2="410" y2="140" stroke="#2563eb" marker-end="url(#arrowBlue)"/>
+              <g class="darrow" tabindex="0" data-step="2" data-title="② Redirect /oauth2/authorize (PKCE)" data-desc="The SPA redirects the browser to /oauth2/authorize with response_type=code, a code_challenge, and code_challenge_method=S256.">
+                <line class="arrow-hit" x1="330" y1="120" x2="410" y2="140"/>
+                <line class="arrow-visible" x1="330" y1="120" x2="410" y2="140" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+              </g>
 
               <!-- 3: AS -> Browser (login) -->
-              <path d="M475,150 C475,180 200,170 120,190" stroke="#059669" marker-end="url(#arrowGreen)" fill="none"/>
+              <g class="darrow" tabindex="0" data-step="3" data-title="③ Login + Consent page" data-desc="The Authorization Server serves a login form (and consent screen) back to the browser.">
+                <path class="arrow-hit" d="M475,150 C475,180 200,170 120,190"/>
+                <path class="arrow-visible" d="M475,150 C475,180 200,170 120,190" stroke="#059669" stroke-width="2" marker-end="url(#arrowGreen)"/>
+              </g>
 
               <!-- 4: Browser -> AS (auth+consent) -->
-              <path d="M120,210 C200,230 475,220 475,250" stroke="#059669" marker-end="url(#arrowGreen)" fill="none"/>
+              <g class="darrow" tabindex="0" data-step="4" data-title="④ POST credentials / consent" data-desc="The browser POSTs the user's credentials and consent decision back to the Authorization Server.">
+                <path class="arrow-hit" d="M120,210 C200,230 475,220 475,250"/>
+                <path class="arrow-visible" d="M120,210 C200,230 475,220 475,250" stroke="#059669" stroke-width="2" marker-end="url(#arrowGreen)"/>
+              </g>
 
               <!-- 5: AS -> React SPA (redirect with code) -->
-              <path d="M475,270 C400,290 350,290 310,300" stroke="#2563eb" marker-end="url(#arrowBlue)" fill="none"/>
+              <g class="darrow" tabindex="0" data-step="5" data-title="⑤ Redirect with auth code" data-desc="The Authorization Server redirects the browser back to the SPA's redirect_uri, carrying a one-time authorization code.">
+                <path class="arrow-hit" d="M475,270 C400,290 350,290 310,300"/>
+                <path class="arrow-visible" d="M475,270 C400,290 350,290 310,300" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+              </g>
 
               <!-- 6: React SPA -> AS (token exchange) -->
-              <line x1="330" y1="320" x2="420" y2="340" stroke="#2563eb" marker-end="url(#arrowBlue)"/>
+              <g class="darrow" tabindex="0" data-step="6" data-title="⑥ POST /oauth2/token (code + verifier)" data-desc="The SPA calls /oauth2/token with the authorization code and code_verifier as proof of PKCE — no client secret is needed for a public client.">
+                <line class="arrow-hit" x1="330" y1="320" x2="420" y2="340"/>
+                <line class="arrow-visible" x1="330" y1="320" x2="420" y2="340" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+              </g>
 
               <!-- AS -> React SPA (tokens back) -->
-              <line x1="530" y1="340" x2="350" y2="340" stroke="#059669" marker-end="url(#arrowGreen)"/>
+              <g class="darrow" tabindex="0" data-title="Tokens issued" data-desc="The Authorization Server responds with an access_token, id_token, and refresh_token — all signed JWTs.">
+                <line class="arrow-hit" x1="530" y1="340" x2="350" y2="340"/>
+                <line class="arrow-visible" x1="530" y1="340" x2="350" y2="340" stroke="#059669" stroke-width="2" marker-end="url(#arrowGreen)"/>
+              </g>
 
               <!-- 7: React SPA -> Resource (user endpoint) -->
-              <line x1="330" y1="370" x2="620" y2="390" stroke="#2563eb" marker-end="url(#arrowBlue)"/>
+              <g class="darrow" tabindex="0" data-step="7" data-title="⑦ GET /user (Bearer token)" data-desc="The SPA calls the Resource Server's /user endpoint with Authorization: Bearer &lt;access_token&gt; to fetch the authenticated user's profile.">
+                <line class="arrow-hit" x1="330" y1="370" x2="620" y2="390"/>
+                <line class="arrow-visible" x1="330" y1="370" x2="620" y2="390" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+              </g>
             </g>
 
             <!-- Arrow labels -->
@@ -703,6 +792,11 @@ client_id=<span class="hl">738...apps.googleusercontent.com</span></pre>
               <text x="420" y="382"><tspan fill="#2563eb">🔵</tspan> Bearer token → /user</text>
             </g>
           </svg>
+
+          <div class="diagram-info" id="diagramInfo">
+            <strong id="diagramInfoTitle">Hover, tap, or Tab to an element</strong>
+            <p id="diagramInfoDesc">Details about each participant and each step of the flow will appear here.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -905,6 +999,57 @@ client_id=<span class="hl">738...apps.googleusercontent.com</span></pre>
 
   window.addEventListener('scroll', updateActive, { passive: true });
   updateActive();
+})();
+
+// Interactive protocol diagram
+(function() {
+  const svg = document.getElementById('protocolSvg');
+  if (!svg) return;
+
+  const infoTitle = document.getElementById('diagramInfoTitle');
+  const infoDesc = document.getElementById('diagramInfoDesc');
+  const defaultTitle = infoTitle ? infoTitle.textContent : '';
+  const defaultDesc = infoDesc ? infoDesc.textContent : '';
+
+  const targets = Array.from(svg.querySelectorAll('.dnode, .darrow'));
+
+  function groupFor(el) {
+    // Elements sharing the same data-step are highlighted together
+    // (e.g. the step-label dot/text and its matching arrow).
+    const step = el.getAttribute('data-step');
+    if (step) return targets.filter(t => t.getAttribute('data-step') === step);
+    return [el];
+  }
+
+  function activate(el) {
+    svg.classList.add('has-active');
+    targets.forEach(t => t.classList.remove('is-active'));
+    groupFor(el).forEach(t => t.classList.add('is-active'));
+    if (infoTitle) infoTitle.textContent = el.getAttribute('data-title') || defaultTitle;
+    if (infoDesc) infoDesc.textContent = el.getAttribute('data-desc') || defaultDesc;
+  }
+
+  function deactivate() {
+    svg.classList.remove('has-active');
+    targets.forEach(t => t.classList.remove('is-active'));
+    if (infoTitle) infoTitle.textContent = defaultTitle;
+    if (infoDesc) infoDesc.textContent = defaultDesc;
+  }
+
+  targets.forEach(el => {
+    el.addEventListener('mouseenter', () => activate(el));
+    el.addEventListener('mouseleave', deactivate);
+    el.addEventListener('focus', () => activate(el));
+    el.addEventListener('blur', deactivate);
+    // Tap support on touch devices
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      activate(el);
+    });
+  });
+
+  // Tapping empty diagram space resets on touch devices
+  svg.addEventListener('click', deactivate);
 })();
 </script>
 
