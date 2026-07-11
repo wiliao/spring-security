@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Real-World OAuth2 Mapping — "Login with Google" ↔ Local Demo</title>
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    background: #f0f4f8;
+    color: #1a202c;
+    line-height: 1.6;
+  }
+
+  /* ── Layout ── */
+  .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── Hero ── */
+  .hero {
+    background: linear-gradient(135deg, #0b3d91 0%, #1a56db 50%, #2563eb 100%);
+    color: #fff;
+    padding: 64px 0 48px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    bottom: -2px; left: 0; right: 0;
+    height: 80px;
+    background: #f0f4f8;
+    clip-path: ellipse(55% 100% at 50% 100%);
+  }
+  .hero h1 { font-size: 2.4rem; font-weight: 700; margin-bottom: 12px; }
+  .hero p { font-size: 1.1rem; opacity: .9; max-width: 680px; margin: 0 auto; }
+  .hero .badge-row { margin-top: 20px; display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+  .hero .badge {
+    background: rgba(255,255,255,.18);
+    border: 1px solid rgba(255,255,255,.3);
+    border-radius: 20px;
+    padding: 5px 16px;
+    font-size: .85rem;
+    font-weight: 500;
+  }
+
+  /* ── Nav ── */
+  .sticky-nav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(255,255,255,.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid #e2e8f0;
+    padding: 10px 0;
+  }
+  .sticky-nav .container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .sticky-nav a {
+    text-decoration: none;
+    color: #4a5568;
+    font-size: .85rem;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 6px;
+    transition: background .2s, color .2s;
+  }
+  .sticky-nav a:hover,
+  .sticky-nav a.active { background: #2563eb; color: #fff; }
+
+  /* ── Section ── */
+  section { padding: 48px 0; }
+  section h2 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #0b3d91;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  section h2 .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px; height: 34px;
+    background: #2563eb;
+    color: #fff;
+    border-radius: 50%;
+    font-size: .95rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  section > .container > p.sub { color: #4a5568; margin-bottom: 32px; font-size: .95rem; }
+
+  /* ── Cards ── */
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+    padding: 24px;
+    margin-bottom: 20px;
+    border: 1px solid #e2e8f0;
+    transition: box-shadow .25s;
+  }
+  .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.1); }
+  .card h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #1a202c;
+    margin-bottom: 12px;
+  }
+
+  /* ── Side-by-side ── */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 720px) { .split { grid-template-columns: 1fr; } }
+  .split .side {
+    background: #fff;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    padding: 20px;
+  }
+  .split .side h4 {
+    font-size: .9rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .split .side h4 .icon { font-size: 1.2rem; }
+  .split .side.google { border-top: 3px solid #4285f4; }
+  .split .side.google h4 { color: #4285f4; }
+  .split .side.demo { border-top: 3px solid #059669; }
+  .split .side.demo h4 { color: #059669; }
+  .split .side p, .split .side ul { font-size: .9rem; color: #374151; }
+  .split .side ul { padding-left: 18px; }
+  .split .side ul li { margin-bottom: 4px; }
+
+  /* ── Flow Step ── */
+  .flow-step {
+    display: grid;
+    grid-template-columns: 42px 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .flow-step .step-num {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    background: #2563eb;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: .95rem;
+    flex-shrink: 0;
+  }
+  .flow-step .step-body { background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; padding: 16px 20px; }
+  .flow-step .step-body h4 { font-size: .95rem; font-weight: 600; margin-bottom: 8px; color: #1a202c; }
+
+  /* ── Code blocks ── */
+  pre {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-size: .78rem;
+    font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    overflow-x: auto;
+    margin: 10px 0;
+    position: relative;
+    line-height: 1.5;
+  }
+  pre .lang-tag {
+    position: absolute;
+    top: 6px; right: 10px;
+    font-size: .65rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+  pre .hl { color: #facc15; }   /* string */
+  pre .kw { color: #67e8f9; }   /* keyword */
+  pre .cm { color: #94a3b8; }   /* comment */
+  pre .nu { color: #f472b6; }   /* number */
+  pre .fn { color: #a78bfa; }   /* function/claim */
+
+  /* ── Tables ── */
+  .table-wrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .88rem;
+  }
+  thead th {
+    background: #f1f5f9;
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    color: #1e293b;
+    border-bottom: 2px solid #cbd5e1;
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: top;
+    color: #374151;
+  }
+  tbody tr:hover td { background: #f8fafc; }
+  table .code { font-family: 'JetBrains Mono', Consolas, monospace; font-size: .8rem; background: #f1f5f9; padding: 1px 5px; border-radius: 3px; }
+
+  /* ── Security grid ── */
+  .security-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 800px) { .security-grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 500px) { .security-grid { grid-template-columns: 1fr; } }
+  .security-grid .sec-item {
+    background: #fff;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    padding: 18px;
+  }
+  .security-grid .sec-item h4 { font-size: .85rem; font-weight: 600; color: #0b3d91; margin-bottom: 6px; }
+  .security-grid .sec-item p { font-size: .82rem; color: #4a5568; }
+
+  /* ── Interactive tabs ── */
+  .tabs { display: flex; gap: 0; border-bottom: 2px solid #e2e8f0; margin-bottom: 0; }
+  .tabs button {
+    padding: 10px 22px;
+    border: none;
+    background: transparent;
+    font-size: .9rem;
+    font-weight: 500;
+    color: #64748b;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color .2s, border-color .2s;
+  }
+  .tabs button:hover { color: #1e293b; }
+  .tabs button.active { color: #2563eb; border-bottom-color: #2563eb; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── Interactive diagram ── */
+  .diagram-container {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    padding: 20px;
+    overflow-x: auto;
+  }
+  .diagram-container svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .diagram-container { position: relative; }
+
+  /* Interactive elements */
+  .dnode, .darrow { cursor: pointer; outline: none; }
+  .dnode { transition: opacity .15s ease; }
+  .darrow { transition: opacity .15s ease; }
+  .dnode-box { transition: stroke-width .15s ease, filter .15s ease; }
+  .arrow-visible { transition: stroke-width .15s ease, filter .15s ease; }
+  .arrow-hit { stroke: transparent; stroke-width: 16; fill: none; pointer-events: stroke; }
+  .dstep-dot { transition: r .15s ease; }
+
+  /* Dim everything except the active element/group */
+  #protocolSvg.has-active .dnode,
+  #protocolSvg.has-active .darrow { opacity: .3; }
+  #protocolSvg.has-active .dnode.is-active,
+  #protocolSvg.has-active .darrow.is-active { opacity: 1; }
+
+  .dnode.is-active .dnode-box {
+    stroke-width: 2.5;
+    filter: drop-shadow(0 0 4px rgba(37,99,235,.45));
+  }
+  .darrow.is-active .arrow-visible {
+    stroke-width: 3.5;
+    filter: drop-shadow(0 0 3px rgba(37,99,235,.35));
+  }
+  .darrow.is-active text { fill: #1e293b; font-weight: 700; }
+  .darrow.is-active .dstep-dot { r: 4.5; }
+
+  .diagram-info {
+    margin-top: 14px;
+    padding: 14px 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    min-height: 58px;
+  }
+  .diagram-info strong { display: block; font-size: .92rem; color: #0b3d91; margin-bottom: 4px; }
+  .diagram-info p { font-size: .85rem; color: #4a5568; margin: 0; }
+
+  /* ── Conclusion ── */
+  .conclusion-box {
+    background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+    border-radius: 12px;
+    border: 1px solid #c7d2fe;
+    padding: 28px 32px;
+  }
+  .conclusion-box h3 { color: #3730a3; margin-bottom: 12px; font-size: 1.1rem; }
+  .conclusion-box ul { padding-left: 20px; color: #374151; font-size: .92rem; }
+  .conclusion-box ul li { margin-bottom: 6px; }
+
+  /* ── Arrow connector ── */
+  .arrow-down {
+    text-align: center;
+    color: #94a3b8;
+    font-size: 1.4rem;
+    padding: 4px 0;
+  }
+
+  /* ── Highlight strip ── */
+  .strip {
+    background: #fef9c3;
+    border-left: 4px solid #eab308;
+    padding: 12px 18px;
+    border-radius: 6px;
+    font-size: .88rem;
+    margin: 12px 0;
+    color: #713f12;
+  }
+
+  /* scroll margin for sticky nav */
+  section[id] { scroll-margin-top: 60px; }
+</style>
+</head>
+<body>
+
+<!-- ════════════ HERO ════════════ -->
+<header class="hero">
+  <div class="container">
+    <h1>🌐 Real-World OAuth2 Mapping</h1>
+    <p>"Sign in with Google" may feel like magic, but behind the scenes it's the same OAuth2 protocol running in this local demo — just different URLs and scale.</p>
+    <div class="badge-row">
+      <span class="badge">🔑 OAuth2 Authorization Code + PKCE</span>
+      <span class="badge">🏗️ Same Protocol</span>
+      <span class="badge">🎯 Different Actors</span>
+    </div>
+  </div>
+</header>
+
+<!-- ════════════ STICKY NAV ════════════ -->
+<nav class="sticky-nav" id="nav">
+  <div class="container">
+    <a href="#mapping">📋 Component Map</a>
+    <a href="#flow">🔄 Step-by-Step Flow</a>
+    <a href="#tokens">🔐 Token Comparison</a>
+    <a href="#security">🛡️ Security</a>
+    <a href="#production">🚀 Production Path</a>
+    <a href="#summary">📝 Summary</a>
+  </div>
+</nav>
+
+<!-- ════════════ COMPONENT MAPPING ════════════ -->
+<section id="mapping">
+  <div class="container">
+    <h2><span class="num">1</span> Component Mapping</h2>
+    <p class="sub">Every piece of the Google OAuth2 infrastructure has a direct counterpart in the local demo.</p>
+
+    <div class="table-wrap card">
+      <table>
+        <thead>
+          <tr><th style="width:22%">Real-World (Google)</th><th style="width:22%">Demo Equivalent</th><th>Demo Config / Code</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Google Accounts</strong> <span style="font-size:.75rem;color:#64748b;">(user store)</span></td><td><code>InMemoryUserDetailsManager</code></td><td><code class="code">SecurityConfig.java</code> — <code class="code">users()</code> bean</td></tr>
+          <tr><td><strong>Google Authorization Server</strong></td><td><code>AuthorizationServerConfig</code></td><td><code class="code">AuthorizationServerConfig.java</code></td></tr>
+          <tr><td><strong>Google's JWK Set</strong></td><td>Local RSA-2048 via <code>JWKSource</code></td><td><code class="code">AuthorizationServerConfig.java</code> — <code class="code">jwkSource()</code></td></tr>
+          <tr><td><strong>Google's OAuth2 Client UI</strong> <span style="font-size:.75rem;color:#64748b;">(consent screen)</span></td><td>Spring AS built-in consent page</td><td><code class="code">ClientSettings.builder().requireAuthorizationConsent(true)</code></td></tr>
+          <tr><td><strong>Third-Party Website</strong> <span style="font-size:.75rem;color:#64748b;">(e.g., myapp.com)</span></td><td>React frontend (<code>localhost:3000</code>)</td><td><code class="code">frontend/src/App.js</code></td></tr>
+          <tr><td><strong>Third-Party Backend</strong></td><td>Spring Boot backend (<code>localhost:8085</code>)</td><td><code class="code">OAuth2DemoApplication.java</code></td></tr>
+          <tr><td><strong>Google's UserInfo Endpoint</strong></td><td>Demo's <code>/user</code> + <code>/admin</code></td><td><code class="code">DemoController.java</code></td></tr>
+          <tr><td><strong>OAuth2 Client Registration</strong> <span style="font-size:.75rem;color:#64748b;">(Cloud Console)</span></td><td><code>RegisteredClient</code> seeded in H2 DB</td><td><code class="code">AuthorizationServerConfig.java</code> — <code class="code">registeredClientRepository()</code></td></tr>
+          <tr><td><strong>Google's Token Endpoint</strong></td><td><code>POST /oauth2/token</code></td><td><code>OAuth2AuthorizationServerConfigurer</code></td></tr>
+          <tr><td><strong>Google's Auth Endpoint</strong></td><td><code>GET /oauth2/authorize</code></td><td><code>OAuth2AuthorizationServerConfigurer</code></td></tr>
+          <tr><td><strong>Redirect URI</strong> <span style="font-size:.75rem;color:#64748b;">(configured in console)</span></td><td><code>http://localhost:3000/callback</code></td><td><code class="code">App.js</code> line 21, <code class="code">AuthorizationServerConfig.java</code></td></tr>
+          <tr><td><strong>PKCE</strong> <span style="font-size:.75rem;color:#64748b;">(public clients)</span></td><td>PKCE <code>S256</code> — code verifier in <code>sessionStorage</code></td><td><code class="code">App.js</code> — <code class="code">generatePKCE()</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ STEP-BY-STEP FLOW ════════════ -->
+<section id="flow" style="background:#f8fafc;">
+  <div class="container">
+    <h2><span class="num">2</span> Step-by-Step Flow</h2>
+    <p class="sub">The OAuth2 protocol is identical in both cases. Every Google step has a demo counterpart.</p>
+
+    <!-- Step 0 -->
+    <div class="flow-step">
+      <div class="step-num">0</div>
+      <div class="step-body">
+        <h4>Prerequisites — Registering the Client</h4>
+        <div class="split">
+          <div class="side google">
+            <h4><span class="icon">🔵</span> Google Cloud Console</h4>
+            <p>Developer goes to <strong>APIs &amp; Services → Credentials → Create OAuth 2.0 Client ID</strong></p>
+            <p style="margin-top:6px;font-size:.82rem;color:#64748b;">Fields: Client ID, Client Secret, Authorized Redirect URIs, Scopes</p>
+          </div>
+          <div class="side demo">
+            <h4><span class="icon">🟢</span> Demo</h4>
+            <p>The <code class="code">RegisteredClient</code> is <strong>seeded programmatically</strong> at startup in <code class="code">AuthorizationServerConfig.registeredClientRepository()</code>.</p>
+            <pre style="margin:8px 0 0;"><span class="lang-tag">Java</span>.clientId(<span class="hl">"demo-client"</span>)
+.clientSecret(passwordEncoder.encode(<span class="hl">"secret"</span>))
+.redirectUri(<span class="hl">"http://localhost:3000/callback"</span>)
+.scope(<span class="hl">"openid"</span>, <span class="hl">"profile"</span>)</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 1 -->
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h4>User Clicks "Sign In"</h4>
+        <div class="split">
+          <div class="side google">
+            <h4><span class="icon">🔵</span> Google</h4>
+            <p>User clicks <strong>"Sign in with Google"</strong> on a third-party website. The website constructs the authorization URL with <code class="code">client_id</code>, <code class="code">redirect_uri</code>, <code class="code">scope</code>, and PKCE params.</p>
+          </div>
+          <div class="side demo">
+            <h4><span class="icon">🟢</span> Demo</h4>
+            <p>User clicks <strong>"Login with OAuth2"</strong> in the React frontend. <code class="code">App.js → handleLogin()</code> generates PKCE challenge and constructs the URL.</p>
+          </div>
+        </div>
+        <pre style="margin-top:8px;"><span class="lang-tag">Google URL</span><span class="cm"># Real-World (Google) Authorization URL</span>
+https://accounts.google.com/o/oauth2/v2/auth?
+  response_type=code<span class="kw">&amp;</span>
+  client_id=<span class="hl">738...apps.googleusercontent.com</span><span class="kw">&amp;</span>
+  redirect_uri=<span class="hl">https://myapp.com/callback</span><span class="kw">&amp;</span>
+  scope=<span class="hl">openid%20profile%20email</span><span class="kw">&amp;</span>
+  code_challenge=<span class="hl">E9...</span><span class="kw">&amp;</span>
+  code_challenge_method=<span class="hl">S256</span><span class="kw">&amp;</span>
+  state=<span class="hl">abc123</span></pre>
+        <div class="arrow-down">⬇</div>
+        <pre><span class="lang-tag">Demo URL</span><span class="cm"># Demo Analogous URL</span>
+http://localhost:8085/oauth2/authorize?
+  response_type=code<span class="kw">&amp;</span>
+  client_id=<span class="hl">demo-client</span><span class="kw">&amp;</span>
+  redirect_uri=<span class="hl">http://localhost:3000/callback</span><span class="kw">&amp;</span>
+  scope=<span class="hl">openid%20profile</span><span class="kw">&amp;</span>
+  code_challenge=<span class="hl">E9...</span><span class="kw">&amp;</span>
+  code_challenge_method=<span class="hl">S256</span><span class="kw">&amp;</span>
+  state=<span class="hl">random-state-xyz</span></pre>
+      </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h4>User Authenticates</h4>
+        <div class="split">
+          <div class="side google">
+            <h4><span class="icon">🔵</span> Google Login</h4>
+            <p>Google displays its <strong>login page</strong> — user enters Gmail email + password. Google validates against <strong>Google Accounts</strong> (millions of users, MFA).</p>
+          </div>
+          <div class="side demo">
+            <h4><span class="icon">🟢</span> Demo Login</h4>
+            <p>Spring AS displays the built-in <strong>form login page</strong> at <code class="code">/login</code>. Validates against <code class="code">InMemoryUserDetailsManager</code> with <strong>2 hardcoded users</strong>:</p>
+            <ul style="margin-top:6px;">
+              <li><strong>user</strong> / <code class="code">password</code> — <code class="code">ROLE_USER</code></li>
+              <li><strong>admin</strong> / <code class="code">admin</code> — <code class="code">ROLE_ADMIN</code></li>
+            </ul>
+          </div>
+        </div>
+        <div class="strip">💡 <strong>Key difference:</strong> Google uses a massive distributed identity platform. The demo uses a simple in-memory store — but <strong>the OAuth2 protocol is identical</strong>. You could swap in a <code class="code">JdbcUserDetailsManager</code> or LDAP without changing any OAuth2 logic.</div>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="flow-step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h4>User Consents to Scopes</h4>
+        <div class="split">
+          <div class="side google">
+            <h4><span class="icon">🔵</span> Google Consent</h4>
+            <p><em>"myapp.com wants to: View your email address, View your profile info"</em><br>User clicks <strong>"Allow"</strong>. Scopes: <code class="code">openid</code>, <code class="code">profile</code>, <code class="code">email</code></p>
+          </div>
+          <div class="side demo">
+            <h4><span class="icon">🟢</span> Demo Consent</h4>
+            <p>Consent page (because <code class="code">requireAuthorizationConsent=true</code>):<br><em>"Demo Client requests: ☐ openid ☐ profile"</em><br>User clicks <strong>"Submit Consent"</strong>. Scopes: <code class="code">openid</code>, <code class="code">profile</code></p>
+          </div>
+        </div>
+        <div class="strip">💡 Google often <strong>skips</strong> the consent screen for trusted apps. Set <code class="code">requireAuthorizationConsent=false</code> to mirror Google's behavior.</div>
+      </div>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="flow-step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h4>Authorization Code Issued</h4>
+        <div class="split">
+          <div class="side google">
+            <h4><span class="icon">🔵</span> Google Redirect</h4>
+            <p>Google redirects the browser back to the third-party site with a <strong>one-time-use authorization code</strong> bound to the PKCE challenge. <code class="code">state</code> prevents CSRF.</p>
+          </div>
+          <div class="side demo">
+            <h4><span class="icon">🟢</span> Demo Redirect</h4>
+            <p>Same — the code is stored in the <code class="code">oauth2_authorization</code> table (H2) bound to the <code class="code">code_challenge</code>. <code class="code">state=random-state-...</code></p>
+          </div>
+        </div>
+        <pre style="margin-top:8px;"><span class="lang-tag">HTTP 302</span><span class="cm"># Redirect Response (both Google and Demo)</span>
+302 Redirect
+Location: https://myapp.com/callback?code=<span class="hl">4/0AX...</span><span class="kw">&amp;</span>state=<span class="hl">abc123</span></pre>
+      </div>
+    </div>
+
+    <!-- Step 5 -->
+    <div class="flow-step">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <h4>Token Exchange (Back-Channel)</h4>
+        <div class="split">
+          <div class="side google">
+            <h4><span class="icon">🔵</span> Google (server-to-server)</h4>
+            <p>The third-party <strong>backend</strong> makes a server-to-server POST to Google. Client secret is kept safe on the server.</p>
+          </div>
+          <div class="side demo">
+            <h4><span class="icon">🟢</span> Demo (client-side)</h4>
+            <p>The React frontend makes a <strong>direct</strong> POST from the browser (CORS-enabled).</p>
+          </div>
+        </div>
+        <pre style="margin-top:8px;"><span class="lang-tag">Google</span><span class="cm"># Google Token Request (server-side)</span>
+POST https://oauth2.googleapis.com/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code<span class="kw">&amp;</span>
+code=<span class="hl">4/0AX...</span><span class="kw">&amp;</span>
+redirect_uri=<span class="hl">https://myapp.com/callback</span><span class="kw">&amp;</span>
+client_id=<span class="hl">738...apps.googleusercontent.com</span><span class="kw">&amp;</span>
+client_secret=<span class="hl">GOCSPX-...</span><span class="kw">&amp;</span>
+code_verifier=<span class="hl">dBj...</span></pre>
+        <div class="arrow-down">⬇</div>
+        <pre><span class="lang-tag">Demo</span><span class="cm"># Demo Token Request (client-side)</span>
+POST http://localhost:8085/oauth2/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code<span class="kw">&amp;</span>
+code=<span class="hl">abc123...</span><span class="kw">&amp;</span>
+redirect_uri=<span class="hl">http://localhost:3000/callback</span><span class="kw">&amp;</span>
+client_id=<span class="hl">demo-client</span><span class="kw">&amp;</span>
+client_secret=<span class="hl">secret</span><span class="kw">&amp;</span>
+code_verifier=<span class="hl">dBj...</span></pre>
+        <div class="strip">💡 <strong>Key difference:</strong> Google's token exchange is <strong>server-side</strong>. In this demo it's <strong>client-side</strong> for simplicity. A production setup would proxy through the backend.</div>
+      </div>
+    </div>
+
+    <!-- Step 6 -->
+    <div class="flow-step">
+      <div class="step-num">6</div>
+      <div class="step-body">
+        <h4>Accessing Protected Resources</h4>
+        <div class="split">
+          <div class="side google">
+            <h4><span class="icon">🔵</span> Google APIs</h4>
+            <p>Third-party backend calls Google APIs with the access token. Google returns user info (id, email, name, picture).</p>
+          </div>
+          <div class="side demo">
+            <h4><span class="icon">🟢</span> Demo Endpoints</h4>
+            <p>Frontend (or backend) calls <code class="code">/user</code> or <code class="code">/admin</code>. Token validated against local JWK Set at <code class="code">/oauth2/jwks</code>.</p>
+          </div>
+        </div>
+        <pre style="margin-top:8px;"><span class="lang-tag">Google</span>GET https://www.googleapis.com/oauth2/v2/userinfo
+Authorization: Bearer <span class="hl">ya29.a0...</span>
+
+<span class="cm"># Response</span>
+{
+  <span class="fn">"id"</span>: <span class="hl">"12345"</span>,
+  <span class="fn">"email"</span>: <span class="hl">"user@gmail.com"</span>,
+  <span class="fn">"name"</span>: <span class="hl">"John Doe"</span>,
+  <span class="fn">"picture"</span>: <span class="hl">"https://..."</span>
+}</pre>
+        <div class="arrow-down">⬇</div>
+        <pre><span class="lang-tag">Demo</span>GET http://localhost:8085/user
+Authorization: Bearer <span class="hl">eyJhbG...</span></pre>
+      </div>
+    </div>
+
+    <!-- Step 7 -->
+    <div class="flow-step">
+      <div class="step-num">7</div>
+      <div class="step-body">
+        <h4>Optional — Token Refresh</h4>
+        <div class="split">
+          <div class="side google">
+            <h4><span class="icon">🔵</span> Google Refresh</h4>
+            <p>When access token expires (3600s), the backend uses the <code class="code">refresh_token</code> to get a new one.</p>
+            <pre style="margin:8px 0 0;font-size:.72rem;">POST https://oauth2.googleapis.com/token
+grant_type=refresh_token<span class="kw">&amp;</span>
+refresh_token=<span class="hl">1//0g...</span><span class="kw">&amp;</span>
+client_id=<span class="hl">738...apps.googleusercontent.com</span></pre>
+          </div>
+          <div class="side demo">
+            <h4><span class="icon">🟢</span> Demo Refresh</h4>
+            <p>The demo supports <code class="code">REFRESH_TOKEN</code> grant type — included in the provider chain.</p>
+            <pre style="margin:8px 0 0;font-size:.72rem;">OAuth2AuthorizedClientProviderBuilder.builder()
+    .authorizationCode()
+    .refreshToken()   <span class="cm">// ← enabled</span>
+    .clientCredentials()
+    .build();</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 8: Interactive Diagram -->
+    <div class="flow-step">
+      <div class="step-num">8</div>
+      <div class="step-body">
+        <h4>Interactive Protocol Diagram</h4>
+        <p style="font-size:.88rem;color:#4a5568;margin-bottom:12px;">Hover (or tap, or Tab-focus) over the components and arrows to explore the full Authorization Code + PKCE flow.</p>
+        <div class="diagram-container" id="diagramContainer">
+          <svg id="protocolSvg" width="920" height="440" viewBox="0 0 920 440" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <marker id="arrowBlue" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/>
+              </marker>
+              <marker id="arrowGreen" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#059669"/>
+              </marker>
+              <marker id="arrowGray" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+              </marker>
+              <filter id="shadow" x="-4%" y="-4%" width="108%" height="112%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity=".12"/>
+              </filter>
+            </defs>
+
+            <!-- Lanes -->
+            <line x1="160" y1="50" x2="160" y2="400" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4,4"/>
+            <line x1="340" y1="50" x2="340" y2="400" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4,4"/>
+            <line x1="540" y1="50" x2="540" y2="400" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4,4"/>
+            <line x1="740" y1="50" x2="740" y2="400" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4,4"/>
+
+            <!-- Participants -->
+            <g class="dnode" tabindex="0" filter="url(#shadow)"
+               data-title="Browser (User Agent)"
+               data-desc="The end user's browser. It never handles client secrets or raw tokens directly — it's only redirected between URLs and holds the session cookie for the demo app.">
+              <rect class="dnode-box" x="40" y="56" width="110" height="44" rx="8" fill="#fff" stroke="#64748b" stroke-width="1.5"/>
+              <text x="95" y="76" font-family="Segoe UI,sans-serif" font-size="13" font-weight="700" fill="#1e293b" text-anchor="middle">Browser</text>
+              <text x="95" y="91" font-family="Segoe UI,sans-serif" font-size="10" fill="#64748b" text-anchor="middle">User Agent</text>
+            </g>
+
+            <g class="dnode" tabindex="0" filter="url(#shadow)"
+               data-title="React SPA (OAuth2 Client)"
+               data-desc="A public client using PKCE. It kicks off the authorization request, generates the code_verifier / code_challenge pair, and later exchanges the auth code for tokens.">
+              <rect class="dnode-box" x="220" y="56" width="110" height="44" rx="8" fill="#fff" stroke="#2563eb" stroke-width="1.5"/>
+              <text x="275" y="76" font-family="Segoe UI,sans-serif" font-size="13" font-weight="700" fill="#1e293b" text-anchor="middle">React SPA</text>
+              <text x="275" y="91" font-family="Segoe UI,sans-serif" font-size="10" fill="#64748b" text-anchor="middle">OAuth2 Client</text>
+            </g>
+
+            <g class="dnode" tabindex="0" filter="url(#shadow)"
+               data-title="Authorization Server (/oauth2/*)"
+               data-desc="Spring Authorization Server. Handles login and consent, issues the one-time authorization code, and exchanges it for signed JWT access/ID/refresh tokens.">
+              <rect class="dnode-box" x="420" y="56" width="110" height="44" rx="8" fill="#fff" stroke="#059669" stroke-width="1.5"/>
+              <text x="475" y="76" font-family="Segoe UI,sans-serif" font-size="13" font-weight="700" fill="#1e293b" text-anchor="middle">Auth Server</text>
+              <text x="475" y="91" font-family="Segoe UI,sans-serif" font-size="10" fill="#64748b" text-anchor="middle">/oauth2/*</text>
+            </g>
+
+            <g class="dnode" tabindex="0" filter="url(#shadow)"
+               data-title="Resource Server (/user)"
+               data-desc="The protected API. It validates the incoming Bearer JWT against the Authorization Server's JWK Set before returning the authenticated user's profile.">
+              <rect class="dnode-box" x="630" y="56" width="110" height="44" rx="8" fill="#fff" stroke="#64748b" stroke-width="1.5"/>
+              <text x="685" y="76" font-family="Segoe UI,sans-serif" font-size="13" font-weight="700" fill="#1e293b" text-anchor="middle">Resource</text>
+              <text x="685" y="91" font-family="Segoe UI,sans-serif" font-size="10" fill="#64748b" text-anchor="middle">Server /user</text>
+            </g>
+
+            <!-- Step labels -->
+            <g class="darrow" tabindex="0" data-step="1"
+               data-title="① Click &quot;Login with OAuth2&quot;"
+               data-desc="The user clicks the login button in the browser, which asks the React SPA to begin the OAuth2 flow.">
+              <rect class="dstep-dot" x="165" y="130" width="6" height="6" rx="3" fill="#2563eb"/>
+              <text x="175" y="135" font-family="Segoe UI,sans-serif" font-size="10" fill="#94a3b8">① Click "Login with OAuth2"</text>
+            </g>
+
+            <g class="darrow" tabindex="0" data-step="2"
+               data-title="② Redirect /oauth2/authorize (PKCE)"
+               data-desc="The SPA redirects the browser to /oauth2/authorize with response_type=code, a code_challenge, and code_challenge_method=S256.">
+              <rect class="dstep-dot" x="165" y="170" width="6" height="6" rx="3" fill="#2563eb"/>
+              <text x="175" y="175" font-family="Segoe UI,sans-serif" font-size="10" fill="#94a3b8">② Redirect /oauth2/authorize (PKCE)</text>
+            </g>
+
+            <g class="darrow" tabindex="0" data-step="3"
+               data-title="③ Login + Consent page"
+               data-desc="The Authorization Server serves a login form (and consent screen) back to the browser.">
+              <rect class="dstep-dot" x="165" y="210" width="6" height="6" rx="3" fill="#059669"/>
+              <text x="175" y="215" font-family="Segoe UI,sans-serif" font-size="10" fill="#94a3b8">③ Login + Consent page</text>
+            </g>
+
+            <g class="darrow" tabindex="0" data-step="4"
+               data-title="④ POST credentials / consent"
+               data-desc="The browser POSTs the user's credentials and consent decision back to the Authorization Server.">
+              <rect class="dstep-dot" x="165" y="250" width="6" height="6" rx="3" fill="#059669"/>
+              <text x="175" y="255" font-family="Segoe UI,sans-serif" font-size="10" fill="#94a3b8">④ POST credentials / consent</text>
+            </g>
+
+            <g class="darrow" tabindex="0" data-step="5"
+               data-title="⑤ Redirect with auth code"
+               data-desc="The Authorization Server redirects the browser back to the SPA's redirect_uri, carrying a one-time authorization code.">
+              <rect class="dstep-dot" x="165" y="290" width="6" height="6" rx="3" fill="#2563eb"/>
+              <text x="175" y="295" font-family="Segoe UI,sans-serif" font-size="10" fill="#94a3b8">⑤ Redirect with auth code</text>
+            </g>
+
+            <g class="darrow" tabindex="0" data-step="6"
+               data-title="⑥ POST /oauth2/token (code + verifier)"
+               data-desc="The SPA calls /oauth2/token with the authorization code and code_verifier as proof of PKCE — no client secret is needed for a public client.">
+              <rect class="dstep-dot" x="165" y="330" width="6" height="6" rx="3" fill="#2563eb"/>
+              <text x="175" y="335" font-family="Segoe UI,sans-serif" font-size="10" fill="#94a3b8">⑥ POST /oauth2/token (code + verifier)</text>
+            </g>
+
+            <g class="darrow" tabindex="0" data-step="7"
+               data-title="⑦ GET /user (Bearer token)"
+               data-desc="The SPA calls the Resource Server's /user endpoint with Authorization: Bearer &lt;access_token&gt; to fetch the authenticated user's profile.">
+              <rect class="dstep-dot" x="165" y="370" width="6" height="6" rx="3" fill="#059669"/>
+              <text x="175" y="375" font-family="Segoe UI,sans-serif" font-size="10" fill="#94a3b8">⑦ GET /user (Bearer token)</text>
+            </g>
+
+            <!-- Arrows -->
+            <g fill="none">
+              <!-- 1: Browser -> React SPA -->
+              <g class="darrow" tabindex="0" data-step="1" data-title="① Click &quot;Login with OAuth2&quot;" data-desc="The user clicks the login button in the browser, which asks the React SPA to begin the OAuth2 flow.">
+                <line class="arrow-hit" x1="80" y1="100" x2="210" y2="120"/>
+                <line class="arrow-visible" x1="80" y1="100" x2="210" y2="120" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+              </g>
+
+              <!-- 2: React SPA -> AS -->
+              <g class="darrow" tabindex="0" data-step="2" data-title="② Redirect /oauth2/authorize (PKCE)" data-desc="The SPA redirects the browser to /oauth2/authorize with response_type=code, a code_challenge, and code_challenge_method=S256.">
+                <line class="arrow-hit" x1="330" y1="120" x2="410" y2="140"/>
+                <line class="arrow-visible" x1="330" y1="120" x2="410" y2="140" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+              </g>
+
+              <!-- 3: AS -> Browser (login) -->
+              <g class="darrow" tabindex="0" data-step="3" data-title="③ Login + Consent page" data-desc="The Authorization Server serves a login form (and consent screen) back to the browser.">
+                <path class="arrow-hit" d="M475,150 C475,180 200,170 120,190"/>
+                <path class="arrow-visible" d="M475,150 C475,180 200,170 120,190" stroke="#059669" stroke-width="2" marker-end="url(#arrowGreen)"/>
+              </g>
+
+              <!-- 4: Browser -> AS (auth+consent) -->
+              <g class="darrow" tabindex="0" data-step="4" data-title="④ POST credentials / consent" data-desc="The browser POSTs the user's credentials and consent decision back to the Authorization Server.">
+                <path class="arrow-hit" d="M120,210 C200,230 475,220 475,250"/>
+                <path class="arrow-visible" d="M120,210 C200,230 475,220 475,250" stroke="#059669" stroke-width="2" marker-end="url(#arrowGreen)"/>
+              </g>
+
+              <!-- 5: AS -> React SPA (redirect with code) -->
+              <g class="darrow" tabindex="0" data-step="5" data-title="⑤ Redirect with auth code" data-desc="The Authorization Server redirects the browser back to the SPA's redirect_uri, carrying a one-time authorization code.">
+                <path class="arrow-hit" d="M475,270 C400,290 350,290 310,300"/>
+                <path class="arrow-visible" d="M475,270 C400,290 350,290 310,300" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+              </g>
+
+              <!-- 6: React SPA -> AS (token exchange) -->
+              <g class="darrow" tabindex="0" data-step="6" data-title="⑥ POST /oauth2/token (code + verifier)" data-desc="The SPA calls /oauth2/token with the authorization code and code_verifier as proof of PKCE — no client secret is needed for a public client.">
+                <line class="arrow-hit" x1="330" y1="320" x2="420" y2="340"/>
+                <line class="arrow-visible" x1="330" y1="320" x2="420" y2="340" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+              </g>
+
+              <!-- AS -> React SPA (tokens back) -->
+              <g class="darrow" tabindex="0" data-title="Tokens issued" data-desc="The Authorization Server responds with an access_token, id_token, and refresh_token — all signed JWTs.">
+                <line class="arrow-hit" x1="530" y1="340" x2="350" y2="340"/>
+                <line class="arrow-visible" x1="530" y1="340" x2="350" y2="340" stroke="#059669" stroke-width="2" marker-end="url(#arrowGreen)"/>
+              </g>
+
+              <!-- 7: React SPA -> Resource (user endpoint) -->
+              <g class="darrow" tabindex="0" data-step="7" data-title="⑦ GET /user (Bearer token)" data-desc="The SPA calls the Resource Server's /user endpoint with Authorization: Bearer &lt;access_token&gt; to fetch the authenticated user's profile.">
+                <line class="arrow-hit" x1="330" y1="370" x2="620" y2="390"/>
+                <line class="arrow-visible" x1="330" y1="370" x2="620" y2="390" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+              </g>
+            </g>
+
+            <!-- Arrow labels -->
+            <g font-family="Segoe UI,sans-serif" font-size="9" fill="#1e293b" font-weight="500">
+              <text x="130" y="112"><tspan fill="#2563eb">🔵</tspan> click</text>
+              <text x="345" y="117"><tspan fill="#2563eb">🔵</tspan> authorize (PKCE)</text>
+              <text x="200" y="178"><tspan fill="#059669">🟢</tspan> login form</text>
+              <text x="200" y="228"><tspan fill="#059669">🟢</tspan> credentials + consent</text>
+              <text x="345" y="293"><tspan fill="#2563eb">🔵</tspan> auth code</text>
+              <text x="345" y="333"><tspan fill="#2563eb">🔵</tspan> code + verifier</text>
+              <text x="460" y="333"><tspan fill="#059669">🟢</tspan> JWT tokens</text>
+              <text x="420" y="382"><tspan fill="#2563eb">🔵</tspan> Bearer token → /user</text>
+            </g>
+          </svg>
+
+          <div class="diagram-info" id="diagramInfo">
+            <strong id="diagramInfoTitle">Hover, tap, or Tab to an element</strong>
+            <p id="diagramInfoDesc">Details about each participant and each step of the flow will appear here.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ TOKEN COMPARISON ════════════ -->
+<section id="tokens">
+  <div class="container">
+    <h2><span class="num">3</span> Token Comparison</h2>
+    <p class="sub">Access tokens and ID tokens share the same JWT structure — only the claim values differ.</p>
+
+    <div class="card">
+      <h3>🔑 Access Token (JWT Payload)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Claim</th><th>Google Example</th><th>Demo Example</th></tr></thead>
+          <tbody>
+            <tr><td><code class="code">iss</code> (issuer)</td><td><code class="code">https://accounts.google.com</code></td><td><code class="code">http://localhost:8085</code></td></tr>
+            <tr><td><code class="code">sub</code> (subject)</td><td><code class="code">1234567890</code></td><td><code class="code">user</code></td></tr>
+            <tr><td><code class="code">aud</code> (audience)</td><td><code class="code">738...apps.googleusercontent.com</code></td><td><code class="code">demo-client</code></td></tr>
+            <tr><td><code class="code">exp</code> (expiry)</td><td>Unix timestamp (1 hour)</td><td>Unix timestamp (1 hour)</td></tr>
+            <tr><td><code class="code">iat</code> (issued at)</td><td>Unix timestamp (now)</td><td>Unix timestamp (now)</td></tr>
+            <tr><td><code class="code">scope</code></td><td><code class="code">openid profile email</code></td><td><code class="code">openid profile</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🪪 ID Token (JWT Payload)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Claim</th><th>Google Example</th><th>Demo Example</th></tr></thead>
+          <tbody>
+            <tr><td><code class="code">iss</code></td><td><code class="code">https://accounts.google.com</code></td><td><code class="code">http://localhost:8085</code></td></tr>
+            <tr><td><code class="code">sub</code></td><td><code class="code">1234567890</code></td><td><code class="code">user</code></td></tr>
+            <tr><td><code class="code">aud</code></td><td><code class="code">738...apps.googleusercontent.com</code></td><td><code class="code">demo-client</code></td></tr>
+            <tr><td><code class="code">azp</code></td><td><code class="code">738...apps.googleusercontent.com</code></td><td><code class="code">demo-client</code></td></tr>
+            <tr><td><code class="code">email</code></td><td><code class="code">user@gmail.com</code></td><td><span style="color:#94a3b8;">(not present — no email scope)</span></td></tr>
+            <tr><td><code class="code">name</code></td><td><code class="code">John Doe</code></td><td><span style="color:#94a3b8;">(not present — depends on UserDetails)</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ SECURITY COMPARISON ════════════ -->
+<section id="security" style="background:#f8fafc;">
+  <div class="container">
+    <h2><span class="num">4</span> Security Comparison</h2>
+    <p class="sub">How security measures compare between Google's production system and the local demo.</p>
+
+    <div class="security-grid">
+      <div class="sec-item">
+        <h4>🔏 Token Signing</h4>
+        <p><strong>Google:</strong> Publicly known RSA keys rotated periodically</p>
+        <p><strong>Demo:</strong> RSA-2048 key generated at each startup — existing tokens invalidated on restart</p>
+      </div>
+      <div class="sec-item">
+        <h4>📌 PKCE</h4>
+        <p><strong>Google:</strong> Required for all public clients (since 2021)</p>
+        <p><strong>Demo:</strong> <code class="code">S256</code> enforced — frontend implements full PKCE</p>
+      </div>
+      <div class="sec-item">
+        <h4>🔒 Client Secret</h4>
+        <p><strong>Google:</strong> Stored in server config, never exposed to browser</p>
+        <p><strong>Demo:</strong> Embedded in frontend for simplicity (would be backend-only in production)</p>
+      </div>
+      <div class="sec-item">
+        <h4>🔐 TLS/HTTPS</h4>
+        <p><strong>Google:</strong> Required — all endpoints enforce HTTPS</p>
+        <p><strong>Demo:</strong> HTTP — localhost only. In production TLS is mandatory.</p>
+      </div>
+      <div class="sec-item">
+        <h4>👤 User Store</h4>
+        <p><strong>Google:</strong> Google Accounts — billions of users, MFA, security monitoring</p>
+        <p><strong>Demo:</strong> <code class="code">InMemoryUserDetailsManager</code> — 2 users, no MFA</p>
+      </div>
+      <div class="sec-item">
+        <h4>✅ Consent</h4>
+        <p><strong>Google:</strong> Shown once, remembered per client</p>
+        <p><strong>Demo:</strong> Shown every time (<code class="code">requireAuthorizationConsent=true</code>) — can be changed to <code class="code">false</code></p>
+      </div>
+      <div class="sec-item">
+        <h4>📄 Token Format</h4>
+        <p><strong>Google:</strong> Opaque access tokens + JWT ID tokens</p>
+        <p><strong>Demo:</strong> JWT access tokens + JWT ID tokens (both RS256)</p>
+      </div>
+      <div class="sec-item">
+        <h4>🔄 Refresh Tokens</h4>
+        <p><strong>Google:</strong> Long-lived, can be revoked by user</p>
+        <p><strong>Demo:</strong> Supported but expires when H2 resets on restart</p>
+      </div>
+      <div class="sec-item">
+        <h4>🛡️ Client Registration</h4>
+        <p><strong>Google:</strong> Google Cloud Console — managed UI</p>
+        <p><strong>Demo:</strong> Hardcoded <code class="code">@Bean</code> — seeded at startup in H2</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ PRODUCTION PATH ════════════ -->
+<section id="production">
+  <div class="container">
+    <h2><span class="num">5</span> What Would Need to Change to Be "Production-Like"</h2>
+    <p class="sub">Making the demo behave like a real Google-style identity provider.</p>
+
+    <div class="table-wrap card">
+      <table>
+        <thead><tr><th>Change</th><th>Current Demo</th><th>Production Equivalent</th></tr></thead>
+        <tbody>
+          <tr><td><strong>User store</strong></td><td><code>InMemoryUserDetailsManager</code></td><td>Database-backed (<code>JdbcUserDetailsManager</code>) or LDAP</td></tr>
+          <tr><td><strong>Key management</strong></td><td>Key generated at each startup</td><td>Persistent key store (e.g., JWK Set loaded from file / Vault)</td></tr>
+          <tr><td><strong>HTTPS</strong></td><td>Plain HTTP</td><td>TLS certificate</td></tr>
+          <tr><td><strong>Client registration</strong></td><td>Hardcoded <code class="code">@Bean</code></td><td>Database table or admin UI</td></tr>
+          <tr><td><strong>Token exchange</strong></td><td>Client-side (React → AS)</td><td>Server-side (backend → AS) — client secret protected</td></tr>
+          <tr><td><strong>Consent persistence</strong></td><td>In-memory H2</td><td>Persistent database with consent expiry</td></tr>
+          <tr><td><strong>User info endpoint</strong></td><td>Custom <code class="code">/user</code> controller</td><td>Standard <code class="code">userinfo</code> endpoint per OIDC spec</td></tr>
+          <tr><td><strong>Session management</strong></td><td>Single-node</td><td>Distributed session store (Redis, JDBC)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card" style="background:#f0fdf4;border-color:#86efac;">
+      <h3 style="color:#166534;">💡 The Best Part</h3>
+      <p style="color:#374151;font-size:.92rem;">The <strong>OAuth2 protocol code itself doesn't change</strong> when moving from demo to production. You swap out the infrastructure (database, TLS, key management) while keeping the same Spring Security configuration. <strong>The same code that integrates with Google's AS can integrate with a local Spring AS</strong> by changing only the <code class="code">ClientRegistration</code> properties (issuer URI, client ID, client secret).</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ SUMMARY ════════════ -->
+<section id="summary" style="background:#f8fafc;">
+  <div class="container">
+    <h2><span class="num">6</span> Summary</h2>
+    <p class="sub">At a glance: how every real-world concept maps to the demo.</p>
+
+    <div class="conclusion-box">
+      <h3>Real World ↔ Demo</h3>
+      <div class="table-wrap" style="margin-bottom:20px;">
+        <table>
+          <thead><tr><th>Real World</th><th></th><th>Demo</th></tr></thead>
+          <tbody>
+            <tr><td>Google Accounts</td><td style="text-align:center;color:#94a3b8;">⟷</td><td><code>InMemoryUserDetailsManager</code></td></tr>
+            <tr><td>Google Authorization Server</td><td style="text-align:center;color:#94a3b8;">⟷</td><td><code>AuthorizationServerConfig</code> + <code>SecurityConfig</code></td></tr>
+            <tr><td>Third-Party Website</td><td style="text-align:center;color:#94a3b8;">⟷</td><td>React Frontend (<code>localhost:3000</code>)</td></tr>
+            <tr><td>Third-Party Backend</td><td style="text-align:center;color:#94a3b8;">⟷</td><td>Spring Boot Backend (<code>localhost:8085</code>)</td></tr>
+            <tr><td>Google APIs / UserInfo</td><td style="text-align:center;color:#94a3b8;">⟷</td><td><code>DemoController</code> (<code>/user</code>, <code>/admin</code>)</td></tr>
+            <tr><td>Google Cloud Console</td><td style="text-align:center;color:#94a3b8;">⟷</td><td><code>registeredClientRepository()</code> <code>@Bean</code></td></tr>
+            <tr><td>PKCE (<code>S256</code>)</td><td style="text-align:center;color:#94a3b8;">⟷</td><td><code>generatePKCE()</code> in <code>App.js</code></td></tr>
+            <tr><td>JWT (RS256 signed)</td><td style="text-align:center;color:#94a3b8;">⟷</td><td>Local RSA-2048 <code>JWKSource</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Why OAuth2 Is Powerful</h3>
+      <ul>
+        <li><strong>Scale</strong>: Google serves billions; this demo serves one developer — <em>same protocol</em></li>
+        <li><strong>URLs</strong>: <code>accounts.google.com</code> → <code>localhost:8085</code> — <em>same structure</em></li>
+        <li><strong>Users</strong>: Google Accounts → 2 hardcoded test users — <em>same API</em></li>
+        <li><strong>Keys</strong>: Google's managed PKI → a one-line RSA key generator — <em>same algorithms</em></li>
+        <li><strong>Portability</strong>: Switch from Google AS to a local Spring AS by changing only <code>issuer-uri</code>, <code>client-id</code>, and <code>client-secret</code></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ FOOTER ════════════ -->
+<footer style="padding:32px 0;text-align:center;color:#94a3b8;font-size:.82rem;border-top:1px solid #e2e8f0;">
+  <div class="container">
+    <p>Spring Security OAuth2 Demo — Real-World Mapping Guide</p>
+    <p style="margin-top:4px;">Built from <code>oauth2/oauth2-demo/docs/real-world-oauth2-mapping.md</code></p>
+  </div>
+</footer>
+
+<!-- ════════════ SCRIPTS ════════════ -->
+<script>
+// Sticky nav active state on scroll
+(function() {
+  const nav = document.getElementById('nav');
+  const links = nav.querySelectorAll('a');
+  const sections = [];
+  links.forEach(a => {
+    const id = a.getAttribute('href').slice(1);
+    const el = document.getElementById(id);
+    if (el) sections.push({ el, a });
+  });
+
+  function updateActive() {
+    let current = sections[0];
+    const scrollY = window.scrollY + 80;
+    for (const s of sections) {
+      if (s.el.offsetTop <= scrollY) current = s;
+    }
+    links.forEach(a => a.classList.remove('active'));
+    if (current) current.a.classList.add('active');
+  }
+
+  window.addEventListener('scroll', updateActive, { passive: true });
+  updateActive();
+})();
+
+// Interactive protocol diagram
+(function() {
+  const svg = document.getElementById('protocolSvg');
+  if (!svg) return;
+
+  const infoTitle = document.getElementById('diagramInfoTitle');
+  const infoDesc = document.getElementById('diagramInfoDesc');
+  const defaultTitle = infoTitle ? infoTitle.textContent : '';
+  const defaultDesc = infoDesc ? infoDesc.textContent : '';
+
+  const targets = Array.from(svg.querySelectorAll('.dnode, .darrow'));
+
+  function groupFor(el) {
+    // Elements sharing the same data-step are highlighted together
+    // (e.g. the step-label dot/text and its matching arrow).
+    const step = el.getAttribute('data-step');
+    if (step) return targets.filter(t => t.getAttribute('data-step') === step);
+    return [el];
+  }
+
+  function activate(el) {
+    svg.classList.add('has-active');
+    targets.forEach(t => t.classList.remove('is-active'));
+    groupFor(el).forEach(t => t.classList.add('is-active'));
+    if (infoTitle) infoTitle.textContent = el.getAttribute('data-title') || defaultTitle;
+    if (infoDesc) infoDesc.textContent = el.getAttribute('data-desc') || defaultDesc;
+  }
+
+  function deactivate() {
+    svg.classList.remove('has-active');
+    targets.forEach(t => t.classList.remove('is-active'));
+    if (infoTitle) infoTitle.textContent = defaultTitle;
+    if (infoDesc) infoDesc.textContent = defaultDesc;
+  }
+
+  targets.forEach(el => {
+    el.addEventListener('mouseenter', () => activate(el));
+    el.addEventListener('mouseleave', deactivate);
+    el.addEventListener('focus', () => activate(el));
+    el.addEventListener('blur', deactivate);
+    // Tap support on touch devices
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      activate(el);
+    });
+  });
+
+  // Tapping empty diagram space resets on touch devices
+  svg.addEventListener('click', deactivate);
+})();
+</script>
+
+</body>
+</html>
+
