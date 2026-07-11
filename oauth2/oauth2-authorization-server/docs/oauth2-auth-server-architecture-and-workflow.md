@@ -663,3 +663,167 @@ sequenceDiagram
 | Protocol filters | `...authorization.web.*` |
 | Request→token conversion | `...authorization.web.authentication.*` |
 | OIDC domain + endpoints | `...authorization.oidc.*` |
+
+## Appendix A — Pushed Authorization Requests (PAR)
+
+This appendix summarizes the Pushed Authorization Requests (PAR) extension (RFC 9126) and how the authorization server implements and handles pushed requests.
+
+1) What is PAR
+
+- PAR lets OAuth clients push the full authorization request parameters to the authorization server directly (over a back-channel), obtaining an opaque `request_uri` that the client later uses in the browser redirect to the authorization endpoint. The browser is redirected with only the short `request_uri` instead of the full parameter set.
+
+2) Why use PAR
+
+- Keeps long or sensitive request parameters (claims, large scope lists, request objects) out of the user-agent and browser history.
+- Works around URL length limits and reduces risk of leaking request data via Referer or logs.
+- Allows the AS to validate and optionally pre-process the authorization request ahead of interactive user consent.
+
+3) High-level flow (server behavior)
+
+- Client authenticates to the PAR endpoint (`POST /oauth2/par`) and submits the authorization request parameters (same parameters as an authorization request, e.g. `response_type`, `client_id`, `redirect_uri`, `scope`, `state`, `nonce`, `claims`, etc.).
+- The AS validates the request (client is permitted to request the requested scopes/claims, redirect URI matching, any required request validators) and persists a pushed request record containing the full parameters.
+- The AS returns a JSON response { `request_uri`: "urn:ietf:params:oauth:request_uri:...", `expires_in`: N } (HTTP 201 Created). The `request_uri` value is an opaque identifier bound to the stored request data and typically short.
+- The client redirects the user-agent to the authorization endpoint using `?request_uri=...` (and may include `client_id` per implementation behavior). The AS resolves the `request_uri` to the stored request and proceeds with the standard authorization flow (consent, code issuance). The pushed request is normally one-time use and has a short TTL.
+
+4) Example requests/responses (illustrative)
+
+Client POST to PAR endpoint (client authenticated):
+
+POST /oauth2/par
+Content-Type: application/x-www-form-urlencoded
+
+response_type=code&client_id=...&redirect_uri=https%3A%2F%2Fclient.example%2Fcb&scope=openid%20email&state=xyz&nonce=abc
+
+Successful response (201 Created):
+
+{
+  "request_uri": "urn:ietf:params:oauth:request_uri:f3f2a8...",
+  "expires_in": 90
+}
+
+Client redirects user-agent:
+
+GET /oauth2/authorize?request_uri=urn:ietf:params:oauth:request_uri:f3f2a8...
+
+The server resolves the `request_uri` to the original parameters and continues the authorization code flow.
+
+5) Server-side implementation notes (as implemented by this module)
+
+- Authentication: The PAR endpoint enforces client authentication (confidential clients) or proper treatment of public clients per profile.
+- Validation: The pushed request is validated at push time (registered redirect URI, requested scopes, `openid` handling when OIDC is disabled, PKCE expectations for public clients, etc.). The same `OAuth2AuthorizationCodeRequestAuthenticationValidator` used for authorization requests is used for pushed requests where applicable.
+- Persistence: The pushed request is stored as part of an `OAuth2Authorization` (or an internal transient record) with a short TTL and a marker indicating one-time consumption.
+- One-time use and TTL: `request_uri` values are short-lived. The authorization server should (and this implementation does by default) make them one-time-use to reduce replay risk. The `expires_in` is returned to clients so they can decide when to redirect the user-agent.
+- Discovery: When the PAR endpoint is enabled, the AS exposes it via authorization-server metadata discovery (`pushed_authorization_request_endpoint` in `/.well-known/oauth-authorization-server` and the OpenID provider configuration where appropriate).
+
+6) Security considerations
+
+- Treat `request_uri` as an opaque handle. Do not expose the pushed request contents to user-agents or logs.
+- Enforce short TTLs and one-time consumption to limit replay attacks.
+- Validate clients and redirect URIs at push time to avoid storing invalid or malicious requests.
+- If supporting request objects or nested signatures, validate signatures at push time.
+
+7) Customization hooks in this module
+
+- `OAuth2PushedAuthorizationRequestEndpointConfigurer` — enable/disable the PAR endpoint and customize its path.
+- `addAuthorizationCodeRequestAuthenticationValidator(...)` — add validators that run on pushed requests in addition to normal authorization requests.
+- Shared `AuthorizationServerSettings` / metadata customizers — ensure `pushed_authorization_request_endpoint` is advertised when PAR is enabled.
+
+References
+
+- RFC 9126 — Pushed Authorization Requests (PAR)
+
+
+## Appendix B — Device Authorization Grant (Device Flow)
+
+This appendix summarizes the OAuth 2.0 Device Authorization Grant (RFC 8628), commonly called the "device flow". It's intended for clients that cannot present a browser-based authorization UI (smart TVs, game consoles, embedded/IoT devices).
+
+1) When to use it
+
+- Use the device flow for input-constrained or browser-less devices that cannot easily perform a full browser redirect + interactive login (e.g. smart TVs, set-top boxes, consoles, some IoT devices).
+- The device flow avoids requiring the user to enter credentials on the constrained device; the user authorizes on a secondary device (phone/PC).
+
+2) High-level flow (roles)
+
+1. Device (the client) POSTs to the device authorization endpoint (e.g. `POST /oauth2/device_authorization`) with parameters such as `client_id` and `scope`. Confidential clients authenticate per policy.
+2. The AS responds with `device_code`, `user_code`, `verification_uri`, optional `verification_uri_complete`, `expires_in`, and optional `interval` (recommended poll interval).
+3. The device displays the `user_code` and instructs the user to visit the `verification_uri` (or scan/visit `verification_uri_complete`) on a separate browser-capable device.
+4. The user authenticates on the secondary device and enters/approves the `user_code` (or uses the complete verification URI) to grant the requested scopes to the client.
+5. Meanwhile, the device polls the token endpoint with the `device_code` (grant type `urn:ietf:params:oauth:grant-type:device_code`) until the AS returns either tokens or a terminal error.
+
+3) Example messages (illustrative)
+
+- Device authorization request (device → AS):
+
+```
+POST /oauth2/device_authorization
+Content-Type: application/x-www-form-urlencoded
+
+client_id=...&scope=openid%20email
+```
+
+- Device authorization response (AS → device):
+
+```
+{
+  "device_code":"GmRhmz...Z7",
+  "user_code":"WDJB-MJHT",
+  "verification_uri":"https://example.com/activate",
+  "verification_uri_complete":"https://example.com/activate?user_code=WDJB-MJHT",
+  "expires_in":600,
+  "interval":5
+}
+```
+
+- Token polling request (device → AS):
+
+```
+POST /oauth2/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=urn:ietf:params:oauth:grant-type:device_code&device_code=GmRhmz...Z7&client_id=...
+```
+
+- Possible token endpoint error responses (HTTP 400 JSON):
+
+```
+{ "error":"authorization_pending" }
+{ "error":"slow_down" }
+{ "error":"access_denied" }
+{ "error":"expired_token" }
+```
+
+- Successful token response (200):
+
+```
+{ "access_token":"abc...", "token_type":"Bearer", "expires_in":3600, "scope":"openid email" }
+```
+
+4) Key parameters and semantics
+
+- `device_code`: opaque server-generated handle used by the device at the token endpoint.
+- `user_code`: short human-enterable code shown to the user.
+- `verification_uri` / `verification_uri_complete`: where the user goes to authenticate and approve the device request.
+- `expires_in`: lifetime of the device/user code.
+- `interval`: suggested polling interval (seconds); the server may ask the client to `slow_down`.
+- Token endpoint grant type: `urn:ietf:params:oauth:grant-type:device_code`.
+
+5) Security considerations & best practices
+
+- Keep `device_code` opaque, bound to `client_id`, and short-lived. Use one-time consumption semantics.
+- Rate-limit polling and enforce the `interval`; respond with `slow_down` when clients poll too quickly.
+- Require client authentication for confidential clients and bind the `device_code` to the authenticated client.
+- Protect the verification UI: require user authentication before approving and rate-limit user_code entry attempts to mitigate brute-force.
+- Avoid leaking sensitive information (codes, request parameters) in logs or referer headers.
+
+6) Server implementation notes (for this module)
+
+- Provide an endpoint `POST /oauth2/device_authorization` that issues `device_code` / `user_code` and persists a pending device authorization record.
+- Provide a verification UI/endpoint (e.g. `/oauth2/device_verification`) where the user can authenticate and approve a pending device request using the `user_code` (or `verification_uri_complete`).
+- When the user approves, mark the pending device authorization as authorized and associate the principal + scopes so that a subsequent token polling call can return tokens.
+- Implement token endpoint behavior per RFC 8628: return `authorization_pending` / `slow_down` / `access_denied` / `expired_token` as applicable, and return tokens when authorized.
+- Persist state, enforce expiry, and ensure one-time consumption to reduce replay risk.
+
+7) References
+
+- RFC 8628 — OAuth 2.0 Device Authorization Grant
+

@@ -1199,7 +1199,7 @@ Content-Type: application/json
  "family_name": "Doe",
  "preferred_username": "j.doe",
  "email": "janedoe@example.com",
- "picture": "http://example.com/janedoe/me.jpg"
+ "picture": "https://example.com/janedoe/me.jpg"
 }
 ```
 
@@ -1281,7 +1281,7 @@ An example Claims request is as follows:
    "email": {"essential": true},
    "email_verified": {"essential": true},
    "picture": null,
-   "http://example.info/claims/groups": null
+   "https://example.info/claims/groups": null
   },
  "id_token":
   {
@@ -1291,7 +1291,7 @@ An example Claims request is as follows:
 }
 ```
 
-Note that a Claim that is not in the standard set defined in clause 10.1, the (example) `http://example.info/claims/groups` Claim, is being requested. Using the `claims` parameter is the only way to request specific combinations of Claims that cannot be specified using scope values.
+Note that a Claim that is not in the standard set defined in clause 10.1, the (example) `https://example.info/claims/groups` Claim, is being requested. Using the `claims` parameter is the only way to request specific combinations of Claims that cannot be specified using scope values.
 
 #### 10.5.1 Individual Claims Requests
 
@@ -1396,7 +1396,7 @@ The following is a non-normative response containing Normal Claims:
  "given_name": "Jane",
  "family_name": "Doe",
  "email": "janedoe@example.com",
- "picture": "http://example.com/janedoe/me.jpg"
+ "picture": "https://example.com/janedoe/me.jpg"
 }
 ```
 
@@ -2601,7 +2601,7 @@ The second segment represents the Claims in the ID Token. Verifying and decoding
  "gender": "female",
  "birthdate": "0000-10-31",
  "email": "janedoe@example.com",
- "picture": "http://example.com/janedoe/me.jpg"
+ "picture": "https://example.com/janedoe/me.jpg"
 }
 ```
 

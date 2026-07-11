@@ -174,7 +174,7 @@ OpenID Connect uses the following discoverable rel value in [RFC7033](#RFC7033):
 
 | Rel Type              | URI                                        |
 | --------------------- | ------------------------------------------ |
-| OpenID Connect Issuer | http://openid.net/specs/connect/1.0/issuer |
+| OpenID Connect Issuer | https://openid.net/specs/connect/1.0/issuer |
 
 To start discovery of OpenID endpoints, the End-User supplies an
  Identifier to the Relying Party.
@@ -194,7 +194,7 @@ The RP applies
 The Issuer location MUST be returned in the WebFinger response
  as the value of the href member of
  a links array element
- with rel member value http://openid.net/specs/connect/1.0/issuer.
+ with rel member value https://openid.net/specs/connect/1.0/issuer.
  (Per Section 7 of [RFC7033](#RFC7033), obtaining the
  WebFinger response may first involve following some redirects.)
 
@@ -318,7 +318,7 @@ To find the Issuer for the given user input
 | ------------------- | ------------------------------------------ |
 | resource            | acct:joe@example.com                       |
 | host                | example.com                                |
-| rel                 | http://openid.net/specs/connect/1.0/issuer |
+| rel                 | https://openid.net/specs/connect/1.0/issuer |
 
 Note that in this case, the acct: scheme [RFC7565](#RFC7565) is prepended to the Identifier.
 
@@ -329,7 +329,7 @@ The RP would make the
 ```
 GET /.well-known/webfinger
   ?resource=acct%3Ajoe%40example.com
-  &rel=http%3A%2F%2Fopenid.net%2Fspecs%2Fconnect%2F1.0%2Fissuer
+    &rel=https%3A%2F%2Fopenid.net%2Fspecs%2Fconnect%2F1.0%2Fissuer
   HTTP/1.1
 Host: example.com
 
@@ -341,7 +341,7 @@ Content-Type: application/jrd+json
  "links":
   [
    {
-    "rel": "http://openid.net/specs/connect/1.0/issuer",
+    "rel": "https://openid.net/specs/connect/1.0/issuer",
     "href": "https://server.example.com"
    }
   ]
@@ -360,7 +360,7 @@ To find the Issuer for the given URL, https://example.com/joe, the WebFinger
 | ------------------- | ------------------------------------------ |
 | resource            | https://example.com/joe                    |
 | host                | example.com                                |
-| rel                 | http://openid.net/specs/connect/1.0/issuer |
+| rel                 | https://openid.net/specs/connect/1.0/issuer |
 
 The RP would make the
  following WebFinger request to discover the Issuer location
@@ -369,7 +369,7 @@ The RP would make the
 ```
 GET /.well-known/webfinger
   ?resource=https%3A%2F%2Fexample.com%2Fjoe
-  &rel=http%3A%2F%2Fopenid.net%2Fspecs%2Fconnect%2F1.0%2Fissuer
+    &rel=https%3A%2F%2Fopenid.net%2Fspecs%2Fconnect%2F1.0%2Fissuer
   HTTP/1.1
 Host: example.com
 
@@ -381,7 +381,7 @@ Content-Type: application/jrd+json
  "links":
   [
    {
-    "rel": "http://openid.net/specs/connect/1.0/issuer",
+    "rel": "https://openid.net/specs/connect/1.0/issuer",
     "href": "https://server.example.com"
    }
   ]
@@ -404,7 +404,7 @@ To find the Issuer for the given
 | ------------------- | ------------------------------------------ |
 | resource            | https://example.com:8080/                  |
 | host                | example.com:8080                           |
-| rel                 | http://openid.net/specs/connect/1.0/issuer |
+| rel                 | https://openid.net/specs/connect/1.0/issuer |
 
 The RP would make the
  following WebFinger request to discover the Issuer location
@@ -425,7 +425,7 @@ Content-Type: application/jrd+json
  "links":
   [
    {
-    "rel": "http://openid.net/specs/connect/1.0/issuer",
+    "rel": "https://openid.net/specs/connect/1.0/issuer",
     "href": "https://server.example.com"
    }
   ]
@@ -445,7 +445,7 @@ To find the Issuer for the given user input
 | ------------------- | -------------------------------------------------- |
 | resource            | acct:juliet%40capulet.example@shopping.example.com |
 | host                | shopping.example.com                               |
-| rel                 | http://openid.net/specs/connect/1.0/issuer         |
+| rel                 | https://openid.net/specs/connect/1.0/issuer         |
 
 The RP would make the
  following WebFinger request to discover the Issuer location
@@ -466,7 +466,7 @@ Content-Type: application/jrd+json
  "links":
   [
    {
-    "rel": "http://openid.net/specs/connect/1.0/issuer",
+    "rel": "https://openid.net/specs/connect/1.0/issuer",
     "href": "https://server.example.com"
    }
   ]
@@ -901,15 +901,15 @@ Content-Type: application/json
  "claim_types_supported":
    ["normal", "distributed"],
  "claims_supported":
-   ["sub", "iss", "auth_time", "acr",
-    "name", "given_name", "family_name", "nickname",
-    "profile", "picture", "website",
-    "email", "email_verified", "locale", "zoneinfo",
-    "http://example.info/claims/groups"],
+  ["sub", "iss", "auth_time", "acr",
+   "name", "given_name", "family_name", "nickname",
+   "profile", "picture", "website",
+   "email", "email_verified", "locale", "zoneinfo",
+   "https://example.info/claims/groups"],
  "claims_parameter_supported":
    true,
- "service_documentation":
-   "http://server.example.com/connect/service_documentation.html",
+   "service_documentation":
+    "https://server.example.com/connect/service_documentation.html",
  "ui_locales_supported":
    ["en-US", "en-GB", "en-CA", "fr-FR", "fr-CA"]
 }
@@ -1214,7 +1214,7 @@ This specification registers the following metadata names in the
 
 ### 9.1. Normative References
 
-| [CORS]                | Opera Software ASA, “[Cross-Origin Resource Sharing](http://www.w3.org/TR/access-control/),” July 2010.                                                                                                  |
+| [CORS]                | Opera Software ASA, “[Cross-Origin Resource Sharing](https://www.w3.org/TR/access-control/),” July 2010.                                                                                                  |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [IANA.well-known]     | IANA, “[Well-Known URIs](https://www.iana.org/assignments/well-known-uris).”                                                                                                                             |
 | [JWA]                 | Jones, M., “[JSON Web Algorithms (JWA)](https://tools.ietf.org/html/rfc7518),” RFC 7518, DOI 10.17487/RFC7518, May 2015.                                                                                 |
@@ -1237,8 +1237,8 @@ This specification registers the following metadata names in the
 | [RFC7033]             | Jones, P., Salgueiro, G., Jones, M., and J. Smarr, “[WebFinger](https://www.rfc-editor.org/info/rfc7033),” RFC 7033, DOI 10.17487/RFC7033, September 2013.                                               |
 | [RFC7159]             | Bray, T., Ed., “[The JavaScript Object Notation (JSON) Data Interchange Format](https://www.rfc-editor.org/info/rfc7159),” RFC 7159, DOI 10.17487/RFC7159, March 2014.                                   |
 | [RFC7565]             | Saint-Andre, P., “[The 'acct' URI Scheme](https://www.rfc-editor.org/info/rfc7565),” RFC 7565, DOI 10.17487/RFC7565, May 2015.                                                                           |
-| [UNICODE]             | The Unicode Consortium, “[The Unicode Standard](http://www.unicode.org/versions/latest/).”                                                                                                               |
-| [USA15]               | [Davis, M.](mailto:markdavis@google.com) and [K. Whistler](mailto:ken@unicode.org), “[Unicode Normalization Forms](http://www.unicode.org/reports/tr15/),” Unicode Standard Annex 15, 06 2015.           |
+| [UNICODE]             | The Unicode Consortium, “[The Unicode Standard](https://www.unicode.org/versions/latest/).”                                                                                                               |
+| [USA15]               | [Davis, M.](mailto:markdavis@google.com) and [K. Whistler](mailto:ken@unicode.org), “[Unicode Normalization Forms](https://www.unicode.org/reports/tr15/),” Unicode Standard Annex 15, 06 2015.           |
 
 ---
 
@@ -1248,11 +1248,11 @@ This specification registers the following metadata names in the
 | [IANA.OAuth.Parameters]    | IANA, “[OAuth Parameters](https://www.iana.org/assignments/oauth-parameters).”                                                                                                                   |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | [OWASP.CSRF]               | OWASP, “[Cross-Site Request Forgery Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html).”                             |
-| [OpenID.Discovery.Errata1] | Sakimura, N., Bradley, J., Jones, M., and E. Jay, “[OpenID Connect Discovery 1.0 incorporating errata set 1](http://openid.net/specs/openid-connect-discovery-1_0-errata1.html),” November 2014. |
-| [OpenID.Discovery.Final]   | Sakimura, N., Bradley, J., Jones, M., and E. Jay, “[OpenID Connect Discovery 1.0 (final)](http://openid.net/specs/openid-connect-discovery-1_0-final.html),” February 2014.                      |
+| [OpenID.Discovery.Errata1] | Sakimura, N., Bradley, J., Jones, M., and E. Jay, “[OpenID Connect Discovery 1.0 incorporating errata set 1](https://openid.net/specs/openid-connect-discovery-1_0-errata1.html),” November 2014. |
+| [OpenID.Discovery.Final]   | Sakimura, N., Bradley, J., Jones, M., and E. Jay, “[OpenID Connect Discovery 1.0 (final)](https://openid.net/specs/openid-connect-discovery-1_0-final.html),” February 2014.                      |
 | [OpenID.Session]           | de Medeiros, B., Agarwal, N., Sakimura, N., Bradley, J., and M. Jones, “[OpenID Connect Session Management 1.0](https://openid.net/specs/openid-connect-session-1_0.html),” September 2022.      |
 | [RFC8414]                  | Jones, M., Sakimura, N., and J. Bradley, “[OAuth 2.0 Authorization Server Metadata](https://www.rfc-editor.org/info/rfc8414),” RFC 8414, DOI 10.17487/RFC8414, June 2018.                        |
-| [XRI\_Syntax\_2.0]         | Reed, D. and D. McAlpin, “[Extensible Resource Identifier (XRI) Syntax V2.0](http://www.oasis-open.org/committees/download.php/15377/xri-syntax-V2.0-cs.pdf),” November 2005.                    |
+| [XRI\_Syntax\_2.0]         | Reed, D. and D. McAlpin, “[Extensible Resource Identifier (XRI) Syntax V2.0](https://www.oasis-open.org/committees/download.php/15377/xri-syntax-V2.0-cs.pdf),” November 2005.                    |
 
 ---
 
@@ -1429,7 +1429,7 @@ The technology described in this specification was
 |        | John Bradley                  |
 |        | Yubico                        |
 | Email: | <ve7jtb@ve7jtb.com>           |
-| URI:   | <http://www.thread-safe.com/> |
+| URI:   | <https://www.thread-safe.com/> |
 |        |                               |
 |        | Michael B. Jones              |
 |        | independent                   |

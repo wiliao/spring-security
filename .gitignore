@@ -31,3 +31,5 @@ s101plugin.state
 !.idea/externalDependencies.xml
 
 node_modules
+/docs/package-lock.json
+/oauth2/oauth2-demo/frontend/package-lock.json
