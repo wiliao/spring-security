@@ -1,34 +1,50 @@
 plugins {
-    id 'org.springframework.boot' version '3.1.3'
-    id 'io.spring.dependency-management' version '1.1.0'
-    id 'java'
+	id 'org.springframework.boot' version "${springBootVersion}"
+	id 'io.spring.dependency-management' version '1.1.7'
+	id 'java'
 }
 
 group = 'org.springframework.security.samples'
 version = '0.0.1-SNAPSHOT'
 
-
-repositories {
-    mavenCentral()
+java {
+	// Pin the compiled bytecode target explicitly so Gradle's bundled tooling can parse
+	// the output regardless of which JDK is running the build.
+	sourceCompatibility = JavaVersion.VERSION_17
+	targetCompatibility = JavaVersion.VERSION_17
 }
 
+// No repositories {} block here deliberately: this project's own repositories block was
+// overriding the centrally-managed ones declared in the root settings.gradle's
+// dependencyResolutionManagement (mavenCentral() + repo.spring.io/snapshot). Since this repo
+// builds against springBootVersion=4.1.0-SNAPSHOT, the snapshot repo is required to resolve
+// spring-boot-loader-tools and related artifacts at the matching version - declaring our own
+// repositories {} here would silently drop that snapshot repo again.
+
 dependencies {
-    // Use local project modules if you add this module to the root settings.gradle
-    // implementation project(':oauth2:oauth2-authorization-server')
-    // implementation project(':oauth2:oauth2-resource-server')
-    // implementation project(':oauth2:oauth2-client')
+	// This repo pins third-party dependency versions (nimbus-jose-jwt, Jackson, oauth2-oidc-sdk, etc.)
+	// via the :spring-security-dependencies platform project, applied automatically to "real" subprojects
+	// by the root build but not to oauth2-demo.
+	implementation platform(project(':spring-security-dependencies'))
 
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'org.springframework.security:spring-security-oauth2-authorization-server:1.1.0'
-    implementation 'org.springframework.security:spring-security-oauth2-client:6.1.3'
-    implementation 'org.springframework.security:spring-security-oauth2-resource-server:6.1.3'
-    implementation 'com.h2database:h2'
+	implementation project(':spring-security-core')
+	implementation project(':spring-security-config')
+	implementation project(':spring-security-web')
+	implementation project(':spring-security-oauth2-authorization-server')
+	implementation project(':spring-security-oauth2-client')
+	implementation project(':spring-security-oauth2-resource-server')
+	// Uncomment if the compiler still can't resolve JOSE/JWT-related types
+	// (e.g. from JwtDecoder / NimbusJwtDecoder wiring in SecurityConfig):
+	// implementation project(':spring-security-oauth2-jose')
+	// implementation project(':spring-security-oauth2-core')
 
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'com.h2database:h2'
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+	useJUnitPlatform()
 }
-
