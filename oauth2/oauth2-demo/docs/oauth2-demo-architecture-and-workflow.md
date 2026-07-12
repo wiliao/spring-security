@@ -22,21 +22,23 @@ The `oauth2-demo` module is a minimal, self-contained Spring Boot application th
 
 **Backend (Spring Boot on port `8085`):**
 - OAuth2 Authorization Server endpoints (configured via Spring Authorization Server APIs)
+  - OpenID Connect 1.0 enabled (required for `openid` scope)
   - Authorization endpoint: `/oauth2/authorize`
   - Token endpoint: `/oauth2/token`
   - JWK Set endpoint: `/oauth2/jwks`
-  - H2 Console: `/h2-console` (for direct database inspection)
+  - H2 Console: `/h2-console` (for direct database inspection, registered programmatically)
 - OAuth2 Client (Spring Security OAuth2 Client) configured with a `ClientRegistration` pointing to the local Authorization Server
+- OAuth2 Resource Server (with JWT decoder) for protecting API endpoints accessed via Bearer tokens
+- CORS configured to allow the React frontend (`localhost:3000`) to make AJAX calls directly (no proxy required)
 - Resource endpoints exposed by the demo controller: `/`, `/user`, `/admin`
 - Database Viewer API endpoints:
-  - `GET /db/clients` — list registered OAuth2 clients
+  - `GET /db/clients` — list registered OAuth2 clients (JSON with lowercase column aliases)
   - `GET /db/authorizations` — list issued authorizations
   - `GET /db/consents` — list user consents
 - Embedded H2 database (in-memory) initialized with Spring Authorization Server schemas for RegisteredClient, Authorization, Consent tables
 
 **Frontend (React on port `3000`):**
-- Standalone React SPA that communicates with the backend via HTTP
-- Proxies API requests to `http://localhost:8085` (configured in `package.json`)
+- Standalone React SPA that communicates with the backend via HTTP (absolute URLs, not proxy)
 - Features:
   - OAuth2 Authorization Code flow with PKCE (automatic code challenge/verifier generation)
   - JWT token viewer with claim decoding
@@ -48,11 +50,11 @@ The `oauth2-demo` module is a minimal, self-contained Spring Boot application th
 **Backend (Spring Boot):**
 - `build.gradle` — demo build configuration (Spring Boot + Authorization Server + OAuth2 client/resource-server + H2)
 - `src/main/java/sample/oauth2/demo/OAuth2DemoApplication.java` — Spring Boot entry point
-- `src/main/java/sample/oauth2/demo/config/AuthorizationServerConfig.java` — Authorization Server wiring (H2 DataSource, JDBC repos, JWK Source, ProviderSettings, RegisteredClient seed)
-- `src/main/java/sample/oauth2/demo/config/SecurityConfig.java` — app security, `ClientRegistrationRepository`, `JwtDecoder`, in-memory users
+- `src/main/java/sample/oauth2/demo/config/AuthorizationServerConfig.java` — Authorization Server wiring (H2 DataSource, JDBC repos, JWK Source, AuthorizationServerSettings, RegisteredClient seed, OIDC enablement, CORS config)
+- `src/main/java/sample/oauth2/demo/config/SecurityConfig.java` — app security, `ClientRegistrationRepository`, `JwtDecoder`, in-memory users, OAuth2 Resource Server (JWT), H2 Console servlet registration, CORS config
 - `src/main/java/sample/oauth2/demo/web/DemoController.java` — small endpoints to exercise auth
-- `src/main/java/sample/oauth2/demo/web/DatabaseViewerController.java` — REST endpoints to view database tables (clients, authorizations, consents)
-- `src/main/resources/application.properties` — demo properties (port + logging + H2 console)
+- `src/main/java/sample/oauth2/demo/web/DatabaseViewerController.java` — REST endpoints to view database tables (with lowercase JSON column aliases for H2 compatibility)
+- `src/main/resources/application.properties` — demo properties (port + logging — H2 console properties removed, handled programmatically)
 
 **Frontend (React):**
 - `frontend/` — standalone React application
@@ -71,9 +73,15 @@ The `oauth2-demo` module is a minimal, self-contained Spring Boot application th
 
 5) Runtime wiring details
 
-- JWKSource: a temporary RSA key pair is generated at startup and exposed via `/oauth2/jwks` so JWT access/id tokens can be validated by resource servers and clients.
-- ProviderSettings: issuer is `http://localhost:8085` (used in generated tokens and discovery metadata).
-- Security filter chains: the Authorization Server filter chain is applied with `OAuth2AuthorizationServerConfigurer`; the application also uses a standard web security chain for form login and OAuth2 login.
+- OpenID Connect 1.0: enabled via `authorizationServerConfigurer.oidc(Customizer.withDefaults())` in the Authorization Server security chain, which is required for the `openid` scope to function.
+- JWKSource: a temporary RSA key pair (2048-bit) is generated at startup and exposed via `/oauth2/jwks` so JWT access/id tokens can be validated by resource servers and clients.
+- ProviderSettings (AuthorizationServerSettings): issuer is `http://localhost:8085` (used in generated tokens and discovery metadata).
+- CORS: a `CorsConfigurationSource` bean is defined that allows `http://localhost:3000` to access `/oauth2/**`, `/.well-known/**`, and `/user` endpoints. Both the Authorization Server and default security filter chains enable CORS via `.cors(Customizer.withDefaults())`.
+- Security filter chains:
+  - Authorization Server filter chain (highest precedence, `@Order(Ordered.HIGHEST_PRECEDENCE)`) — applies `OAuth2AuthorizationServerConfigurer` with OIDC support, CORS, and form login.
+  - Default application filter chain (`@Order(2)`) — permits public access to `/`, `/error`, `/login/**`, `/oauth2/**`, `/.well-known/**`, `/h2-console/**`, `/db/**`; requires authentication for all others. Enables form login, `oauth2Login`, OAuth2 Resource Server (JWT), and CORS.
+- OAuth2 Resource Server: the default security chain configures `.oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))` so that API calls with a Bearer token (e.g., from the React frontend's Protected Resource tab) are authenticated via the `JwtDecoder` bean.
+- H2 Console: the H2 `JakartaWebServlet` is registered programmatically via a `ServletRegistrationBean` in `SecurityConfig.h2ConsoleServlet()`. This replaces the `spring.h2.console.enabled` property, which is not auto-configured in Spring Boot 4.1.0-SNAPSHOT.
 
 6) How to run the demo
 
@@ -163,6 +171,17 @@ Open `http://localhost:3000` in your browser to access the full interactive demo
 
    - http://localhost:8085/user — should show a greeting with the principal name.
 
+**Testing API with Bearer Token (via curl):**
+
+1. Obtain a token programmatically (PKCE flow) or use the React frontend to capture an access token.
+2. Test the protected resource with the Bearer token:
+
+   ```bash
+   curl -H "Authorization: Bearer <access_token>" http://localhost:8085/user
+   ```
+
+   This validates the token via the OAuth2 Resource Server JWT decoder configured in the default security chain.
+
 8) Inspect H2 database
 
 **Option 1: React Frontend Database Viewer (recommended)**
@@ -204,7 +223,9 @@ Invoke-WebRequest -Uri "http://localhost:8085/db/consents" | Select-Object -Expa
 9) Troubleshooting
 
 - If the application fails to start due to dependency resolution or version conflicts when running from the root build, run the demo in isolation (I can add a local wrapper) or align versions in `build.gradle` to match the repo.
-- If login/redirect fails: check console logs for token exchange errors and ensure the RegisteredClient redirect URIs exactly match the client registration in `AuthorizationServerConfig`.
+- If login/redirect fails: check console logs for token exchange errors and ensure the RegisteredClient redirect URIs exactly match the client registration in `AuthorizationServerConfig`. The demo configures three redirect URIs: `http://localhost:8085/login/oauth2/code/demo-client`, `http://localhost:8085/authorized`, and `http://localhost:3000/callback`.
+- If CORS errors appear in the browser console, ensure the backend is running with the `CorsConfigurationSource` bean active (allows `http://localhost:3000`). The React frontend uses absolute URLs (e.g., `http://localhost:8085/oauth2/token`) so CORS must be working — check that both security filter chains have `.cors(Customizer.withDefaults())` enabled.
+- If the H2 console is not available at `/h2-console`, verify the `h2ConsoleServlet()` bean in `SecurityConfig` is registered. This is a programmatic replacement because Spring Boot 4.1.0-SNAPSHOT does not include `H2ConsoleAutoConfiguration`.
 - If JWT verification fails on the client side, ensure the JWK Set is reachable at `http://localhost:8085/oauth2/jwks` and that the `jwkSetUri` in the `ClientRegistration` matches it.
 
 10) Architecture enhancements (completed)
@@ -212,20 +233,34 @@ Invoke-WebRequest -Uri "http://localhost:8085/db/consents" | Select-Object -Expa
 The following enhancements have been implemented:
 
 ✅ **H2 Console + Database Viewer**
-- H2 web console enabled at `/h2-console` for direct database inspection
-- Database Viewer REST API with endpoints for `/db/clients`, `/db/authorizations`, `/db/consents`
+- H2 web console enabled at `/h2-console` for direct database inspection (registered programmatically via `ServletRegistrationBean`)
+- Database Viewer REST API with endpoints for `/db/clients`, `/db/authorizations`, `/db/consents` (with lowercase JSON column aliases for H2 compatibility)
 - Interactive database viewer in the React UI
+
+✅ **CORS Configuration for React Frontend**
+- `CorsConfigurationSource` bean allows `http://localhost:3000` on `/oauth2/**`, `/.well-known/**`, `/user`
+- CORS enabled on both Authorization Server and default security filter chains
+- React frontend uses absolute URLs (no proxy dependency)
+
+✅ **OpenID Connect 1.0 Support**
+- OIDC enabled on the Authorization Server via `authorizationServerConfigurer.oidc()`
+- `openid` scope fully functional with discovery metadata
+
+✅ **OAuth2 Resource Server (JWT)**
+- Default security chain validates Bearer tokens via `NimbusJwtDecoder`
+- `/user` and `/admin` endpoints accessible both via session and Bearer token
 
 ✅ **Standalone Frontend Setup**
 - Complete React SPA in `frontend/` directory
 - Quick start: `cd frontend && npm install && npm start`
-- React proxies API requests to backend at `http://localhost:8085`
+- React uses absolute URLs with CORS (not CRA proxy)
 
 ✅ **Complete ReactJS Frontend**
-- OAuth2 Authorization Code flow with PKCE support
+- OAuth2 Authorization Code flow with PKCE support (S256 code challenge)
 - JWT token decoder with claim visualization
 - Protected resource access with Bearer token authentication
 - Database table viewer (clients, authorizations, consents)
+- React StrictMode guard for token exchange (prevents duplicate execution)
 - Responsive design with intuitive UI
 
 11) Further enhancements and customizations
@@ -246,7 +281,7 @@ For feature requests or questions, refer to the main Spring Security documentati
 This appendix documents how the OAuth2 Authorization Server is bootstrapped in the demo application and points to the exact wiring in the codebase.
 
 Files to inspect
-- `src/main/java/sample/oauth2/demo/config/AuthorizationServerConfig.java` — core Authorization Server wiring (DataSource, JDBC repositories, RegisteredClient seed, JWK generation, ProviderSettings, Authorization Server filter chain).
+- `src/main/java/sample/oauth2/demo/config/AuthorizationServerConfig.java` — core Authorization Server wiring (DataSource, JDBC repositories, RegisteredClient seed, JWK generation, AuthorizationServerSettings, Authorization Server filter chain with OIDC).
 - `src/main/java/sample/oauth2/demo/config/SecurityConfig.java` — default web security, in-memory users, `ClientRegistrationRepository` for the demo client, and `JwtDecoder` configuration.
 
 Key bootstrap steps and where they happen
@@ -260,7 +295,14 @@ Key bootstrap steps and where they happen
 - `JdbcOAuth2AuthorizationService` and `JdbcOAuth2AuthorizationConsentService` are wired to persist runtime authorizations and consents.
 
 3) RegisteredClient seed (demo client)
-- The demo creates and persists a `RegisteredClient` with these properties: `clientId="demo-client"`, `clientSecret="secret"` (encoded via the configured `PasswordEncoder`), grant types `authorization_code` and `refresh_token`, redirect URIs `http://localhost:8085/login/oauth2/code/demo-client` and `http://localhost:8085/authorized`, scopes `openid` and `profile`, and `requireAuthorizationConsent=true`.
+- The demo creates and persists a `RegisteredClient` with these properties:
+  - `clientId="demo-client"`, `clientSecret="secret"` (encoded via the configured `PasswordEncoder`)
+  - Client authentication methods: `CLIENT_SECRET_BASIC` and `CLIENT_SECRET_POST`
+  - Grant types: `authorization_code` and `refresh_token`
+  - Redirect URIs: `http://localhost:8085/login/oauth2/code/demo-client`, `http://localhost:8085/authorized`, and `http://localhost:3000/callback` (for React frontend PKCE flow)
+  - Scopes: `openid` and `profile`
+  - `requireAuthorizationConsent=true`
+  - Access token TTL: 1 hour (`TokenSettings`)
 
 4) JWK generation and exposure
 - `AuthorizationServerConfig.jwkSource()` generates an RSA key pair (2048 bits) at startup, builds a Nimbus `RSAKey` and `JWKSet`, and exposes a `JWKSource<SecurityContext>` used by the Authorization Server to serve `/oauth2/jwks`. Tokens issued by the server are signed with this key.
@@ -269,36 +311,51 @@ Key bootstrap steps and where they happen
 - `AuthorizationServerConfig.providerSettings()` sets the issuer to `http://localhost:8085`. The issuer value is used in generated tokens and discovery metadata.
 
 6) Security filter chains
-- The Authorization Server installs a dedicated `SecurityFilterChain` via `authorizationServerSecurityFilterChain(HttpSecurity)` annotated with `@Order(Ordered.HIGHEST_PRECEDENCE)`. It applies `OAuth2AuthorizationServerConfigurer` to register the standard Authorization Server endpoints (`/oauth2/authorize`, `/oauth2/token`, `/oauth2/jwks`, discovery metadata, etc.).
-- The default application `SecurityFilterChain` is declared in `SecurityConfig.defaultSecurityFilterChain(...)` and permits public access to `/oauth2/**`, `/.well-known/**`, `/h2-console/**` and the demo `/db/**` endpoints; it also enables form login and `oauth2Login` for the client/UI.
+- The Authorization Server installs a dedicated `SecurityFilterChain` via `authorizationServerSecurityFilterChain(HttpSecurity)` annotated with `@Order(Ordered.HIGHEST_PRECEDENCE)`. It applies `OAuth2AuthorizationServerConfigurer` to register the standard Authorization Server endpoints (`/oauth2/authorize`, `/oauth2/token`, `/oauth2/jwks`, discovery metadata, etc.). OpenID Connect 1.0 support is enabled via `authorizationServerConfigurer.oidc(Customizer.withDefaults())`. CORS is also enabled on this chain.
+- The default application `SecurityFilterChain` is declared in `SecurityConfig.defaultSecurityFilterChain(...)` and permits public access to `/`, `/error`, `/webjars/**`, `/login/**`, `/oauth2/**`, `/.well-known/**`, `/h2-console/**` and the demo `/db/**` endpoints. It enables form login, `oauth2Login` for the client/UI, OAuth2 Resource Server with JWT (so that Bearer-token API calls from the React frontend are authenticated), and CORS.
 
 7) Users, client registration (client side) and token validation
-- In-memory users (username `user`, password `password`; username `admin`, password `admin`) are declared in `SecurityConfig.users(...)` for interactive logins.
-- To allow the application to act as an OAuth2 client against the local Authorization Server, an in-memory `ClientRegistrationRepository` is configured in `SecurityConfig.clientRegistrationRepository()` with a matching registration for `demo-client` and the appropriate `authorizationUri`, `tokenUri`, and `jwkSetUri` pointing to the local server.
+- In-memory users (username `user`, password `password`, role `USER`; username `admin`, password `admin`, role `ADMIN`) are declared in `SecurityConfig.users(...)` for interactive logins.
+- To allow the application to act as an OAuth2 client against the local Authorization Server, an in-memory `ClientRegistrationRepository` is configured in `SecurityConfig.clientRegistrationRepository()` with a matching registration for `demo-client` and the appropriate `authorizationUri`, `tokenUri`, and `jwkSetUri` pointing to the local server. The redirect URI includes both `http://localhost:8085/login/oauth2/code/demo-client` and `http://localhost:3000/callback`.
 - `SecurityConfig.jwtDecoder()` creates a `NimbusJwtDecoder` that uses the server's `jwkSetUri` (`http://localhost:8085/oauth2/jwks`) to validate JWTs issued by the demo Authorization Server.
+- OAuth2 Resource Server: the default security chain enables `oauth2ResourceServer` with JWT support, so the `/user` and `/admin` endpoints can also be accessed with a Bearer token from the React frontend (in addition to session-based access via `oauth2Login`).
+
+8) H2 Console servlet registration
+- `SecurityConfig.h2ConsoleServlet()` registers the H2 `JakartaWebServlet` (from `org.h2.server.web`) via a `ServletRegistrationBean` mapped to `/h2-console/*`. This is necessary because Spring Boot 4.1.0-SNAPSHOT does not include `H2ConsoleAutoConfiguration`, so setting `spring.h2.console.enabled=true` in `application.properties` has no effect — the property was removed and replaced with this programmatic registration.
+
+9) CORS configuration
+- `AuthorizationServerConfig.corsConfigurationSource()` defines a `CorsConfigurationSource` bean that allows `http://localhost:3000` (the React frontend) with methods `GET`, `POST`, `OPTIONS`, all headers, and credentials. It is applied to three URL patterns: `/oauth2/**`, `/.well-known/**`, and `/user`.
+- Both security filter chains enable CORS with `.cors(Customizer.withDefaults())`, which picks up this bean automatically.
+- The React frontend uses absolute URLs (e.g., `http://localhost:8085/oauth2/token`) instead of the CRA proxy, so the CORS configuration is essential for all AJAX calls (token exchange, protected resource access, and database viewer API calls).
 
 Bootstrap (startup) sequence (conceptual)
 
 1. Spring Boot starts and configuration classes are initialized.
 2. `dataSource()` creates the embedded H2 DB and runs the Authorization Server schema SQL scripts.
 3. `jdbcTemplate()` is created and used to initialize JDBC-backed repositories.
-4. `registeredClientRepository()` constructs and saves the demo `RegisteredClient` into the JDBC repository.
+4. `registeredClientRepository()` constructs and saves the demo `RegisteredClient` (with 3 redirect URIs, PKCE required, `CLIENT_SECRET_BASIC` + `CLIENT_SECRET_POST` auth methods) into the JDBC repository.
 5. `authorizationService()` and `authorizationConsentService()` are wired to use the `JdbcTemplate` and `RegisteredClientRepository`.
-6. `jwkSource()` generates the RSA keypair and makes the JWKSet available to the server.
-7. `providerSettings()` sets the issuer and discovery metadata.
-8. The Authorization Server security filter chain is registered (highest precedence) and registers the `/oauth2/*` endpoints.
-9. The default security chain, user details, client registration, and `JwtDecoder` are created.
-10. The server becomes available at `http://localhost:8085` with working Authorization Server endpoints and the H2 console at `/h2-console`.
+6. `jwkSource()` generates the RSA keypair (2048-bit) and makes the JWKSet available to the server.
+7. `authorizationServerSettings()` sets the issuer (`http://localhost:8085`) and discovery metadata.
+8. `corsConfigurationSource()` creates the CORS configuration allowing `localhost:3000` on `/oauth2/**`, `/.well-known/**`, and `/user`.
+9. The Authorization Server security filter chain is registered (highest precedence) with `OAuth2AuthorizationServerConfigurer`, OIDC enabled, CORS enabled, and form login.
+10. The default security chain (order 2), user details, `ClientRegistrationRepository`, `JwtDecoder`, and `h2ConsoleServlet()` are created. The default chain enables form login, `oauth2Login`, OAuth2 Resource Server (JWT), and CORS.
+11. The server becomes available at `http://localhost:8085` with working Authorization Server endpoints (including OIDC discovery), the H2 console at `/h2-console` (via programmatic servlet registration), CORS-enabled endpoints for the React frontend, and Bearer token authentication via the resource server.
 
 Useful pointers and values
-- Demo RegisteredClient values: `clientId=demo-client`, `clientSecret=secret`, scopes `openid,profile`, redirect URIs include `http://localhost:8085/login/oauth2/code/demo-client`.
+- Demo RegisteredClient values: `clientId=demo-client`, `clientSecret=secret` (BCrypt encoded), scopes `openid,profile`, redirect URIs include `http://localhost:8085/login/oauth2/code/demo-client`, `http://localhost:8085/authorized`, and `http://localhost:3000/callback`. Client auth methods: `CLIENT_SECRET_BASIC` and `CLIENT_SECRET_POST`.
 - JWKSet URI: `http://localhost:8085/oauth2/jwks`
+- OIDC Discovery URL: `http://localhost:8085/.well-known/openid-configuration`
 - H2 console URL: `http://localhost:8085/h2-console` (default JDBC URL `jdbc:h2:mem:testdb`)
+- CORS origins: `http://localhost:3000` (React frontend)
+- React frontend: `http://localhost:3000` with callback URI `http://localhost:3000/callback`
 
 Where to look in the code (quick links)
-- `oauth2-demo/src/main/java/sample/oauth2/demo/config/AuthorizationServerConfig.java` (DataSource, RegisteredClient seed, JWKSource, ProviderSettings, AuthorizationServerSecurityFilterChain)
-- `oauth2-demo/src/main/java/sample/oauth2/demo/config/SecurityConfig.java` (default security chain, users, ClientRegistrationRepository, JwtDecoder)
+- `oauth2-demo/src/main/java/sample/oauth2/demo/config/AuthorizationServerConfig.java` (DataSource, RegisteredClient seed, JWKSource, AuthorizationServerSettings, AuthorizationServerSecurityFilterChain with OIDC, CORS configuration)
+- `oauth2-demo/src/main/java/sample/oauth2/demo/config/SecurityConfig.java` (default security chain, OAuth2 Resource Server JWT, users, ClientRegistrationRepository, JwtDecoder, H2 Console servlet registration)
 - `oauth2-demo/src/main/java/sample/oauth2/demo/OAuth2DemoApplication.java` (Spring Boot entry point)
+- `oauth2-demo/src/main/java/sample/oauth2/demo/web/DatabaseViewerController.java` (DB viewer endpoints with lowercase column aliases)
+- `oauth2-demo/frontend/src/App.js` (React SPA: PKCE generation, token exchange, session management, JWT decoding)
 
 If you'd like, I can add inline comments in the source files that call out these bootstrap steps, or create a small architecture diagram (SVG/PNG) and embed it in this docs page.
 
@@ -398,7 +455,7 @@ SVG image (embedded):
 
     <!-- Authorization Server -> Browser (login form) -->
     <line x1="540" y1="90" x2="110" y2="120" marker-end="url(#arrow)" />
-    <text x="325" y="95" class="note" text-anchor="middle">Show login & consent</text>
+    <text x="325" y="95" class="note" text-anchor="middle">Show login &amp; consent</text>
 
     <!-- Browser -> Authorization Server (submit credentials -> consent approve) -->
     <line x1="110" y1="140" x2="540" y2="140" marker-end="url(#arrow)" />
