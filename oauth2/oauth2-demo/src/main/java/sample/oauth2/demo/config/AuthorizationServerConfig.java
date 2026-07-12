@@ -5,6 +5,7 @@ import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 
 import javax.sql.DataSource;
@@ -33,6 +34,9 @@ import org.springframework.security.oauth2.server.authorization.settings.Authori
 import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
 import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -72,10 +76,12 @@ public class AuthorizationServerConfig {
 			.clientId("demo-client")
 			.clientSecret(passwordEncoder.encode("secret"))
 			.clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+			.clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
 			.authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
 			.authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
 			.redirectUri("http://localhost:8085/login/oauth2/code/demo-client")
 			.redirectUri("http://localhost:8085/authorized")
+			.redirectUri("http://localhost:3000/callback")
 			.scope("openid")
 			.scope("profile")
 			.tokenSettings(TokenSettings.builder().accessTokenTimeToLive(Duration.ofHours(1)).build())
@@ -115,10 +121,14 @@ public class AuthorizationServerConfig {
 		// (the non-deprecated replacement for http.apply(...), since it extends
 		// AbstractHttpConfigurer).
 		OAuth2AuthorizationServerConfigurer authorizationServerConfigurer = new OAuth2AuthorizationServerConfigurer();
+		// Enable OpenID Connect 1.0 support (required for the 'openid' scope)
+		authorizationServerConfigurer.oidc(Customizer.withDefaults());
 
 		http.securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
 			.with(authorizationServerConfigurer, Customizer.withDefaults())
 			.authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
+			// Enable CORS so the React frontend (localhost:3000) can exchange tokens
+			.cors(Customizer.withDefaults())
 			// Allow form login for the authorization endpoints (login/consent flows)
 			.formLogin(Customizer.withDefaults());
 
@@ -158,6 +168,23 @@ public class AuthorizationServerConfig {
 	@Bean
 	public PasswordEncoder passwordEncoder() {
 		return new BCryptPasswordEncoder();
+	}
+
+	@Bean
+	public CorsConfigurationSource corsConfigurationSource() {
+		// CORS configuration to allow the React frontend (localhost:3000)
+		// to make AJAX requests to the OAuth2 token, jwks, and other endpoints.
+		// This is needed in production; in development the CRA proxy handles it.
+		CorsConfiguration configuration = new CorsConfiguration();
+		configuration.setAllowedOrigins(List.of("http://localhost:3000"));
+		configuration.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+		configuration.setAllowedHeaders(List.of("*"));
+		configuration.setAllowCredentials(true);
+		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+		source.registerCorsConfiguration("/oauth2/**", configuration);
+		source.registerCorsConfiguration("/.well-known/**", configuration);
+		source.registerCorsConfiguration("/user", configuration);
+		return source;
 	}
 
 }

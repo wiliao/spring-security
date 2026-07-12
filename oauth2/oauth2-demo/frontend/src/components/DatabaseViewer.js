@@ -118,7 +118,7 @@ function DatabaseViewer() {
         {activeTab === 'consents' && (
           <div>
             <h3>Authorization Consents</h3>
-            {renderTable(consents, ['id', 'registered_client_id', 'principal_name', 'authorities'])}
+            {renderTable(consents, ['registered_client_id', 'principal_name', 'authorities'])}
           </div>
         )}
       </div>
@@ -137,4 +137,3 @@ function DatabaseViewer() {
 }
 
 export default DatabaseViewer;
-

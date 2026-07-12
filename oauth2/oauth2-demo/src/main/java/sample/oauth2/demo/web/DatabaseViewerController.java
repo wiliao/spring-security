@@ -18,7 +18,10 @@ public class DatabaseViewerController {
 
 	@GetMapping("/clients")
 	public Object getRegisteredClients() {
-		String sql = "SELECT id, client_id, client_secret, client_name FROM oauth2_registered_client";
+		// Use double-quoted aliases to preserve lowercase column names in the JSON
+		// response. H2 uppercases unquoted identifiers, but the frontend accesses
+		// these fields as lowercase (e.g., row['id'], row['client_id']).
+		String sql = "SELECT id AS \"id\", client_id AS \"client_id\", client_secret AS \"client_secret\", client_name AS \"client_name\" FROM oauth2_registered_client";
 		try {
 			List<Map<String, Object>> result = jdbcTemplate.queryForList(sql);
 			return result.isEmpty() ? "No registered clients found." : result;
@@ -30,7 +33,7 @@ public class DatabaseViewerController {
 
 	@GetMapping("/authorizations")
 	public Object getAuthorizations() {
-		String sql = "SELECT id, registered_client_id, principal_name, authorization_grant_type FROM oauth2_authorization";
+		String sql = "SELECT id AS \"id\", registered_client_id AS \"registered_client_id\", principal_name AS \"principal_name\", authorization_grant_type AS \"authorization_grant_type\" FROM oauth2_authorization";
 		try {
 			List<Map<String, Object>> result = jdbcTemplate.queryForList(sql);
 			return result.isEmpty() ? "No authorizations found." : result;
@@ -42,7 +45,9 @@ public class DatabaseViewerController {
 
 	@GetMapping("/consents")
 	public Object getConsents() {
-		String sql = "SELECT id, registered_client_id, principal_name, authorities FROM oauth2_authorization_consent";
+		// Note: oauth2_authorization_consent has NO 'id' column;
+		// its primary key is a composite (registered_client_id, principal_name).
+		String sql = "SELECT registered_client_id AS \"registered_client_id\", principal_name AS \"principal_name\", authorities AS \"authorities\" FROM oauth2_authorization_consent";
 		try {
 			List<Map<String, Object>> result = jdbcTemplate.queryForList(sql);
 			return result.isEmpty() ? "No consents found." : result;

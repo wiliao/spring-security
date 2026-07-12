@@ -38,7 +38,15 @@ public class SecurityConfig {
 					"/h2-console/**", "/db/**")
 			.permitAll()
 			.anyRequest()
-			.authenticated()).formLogin(Customizer.withDefaults()).oauth2Login(Customizer.withDefaults());
+			.authenticated())
+			.formLogin(Customizer.withDefaults())
+			.oauth2Login(Customizer.withDefaults())
+			// Enable OAuth2 Resource Server with JWT decoder so that API calls
+			// with a Bearer token (e.g. from the React frontend's ProtectedResource
+			// tab) are authenticated via the existing JwtDecoder bean.
+			.oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+			// Enable CORS so the React frontend (localhost:3000) can access protected resources
+			.cors(Customizer.withDefaults());
 
 		http.csrf(csrf -> csrf.ignoringRequestMatchers("/h2-console/**"));
 		http.headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable));
@@ -69,6 +77,7 @@ public class SecurityConfig {
 					org.springframework.security.oauth2.core.ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
 			.authorizationGrantType(org.springframework.security.oauth2.core.AuthorizationGrantType.AUTHORIZATION_CODE)
 			.redirectUri("http://localhost:8085/login/oauth2/code/demo-client")
+			.redirectUri("http://localhost:3000/callback")
 			.scope("openid", "profile")
 			.authorizationUri("http://localhost:8085/oauth2/authorize")
 			.tokenUri("http://localhost:8085/oauth2/token")

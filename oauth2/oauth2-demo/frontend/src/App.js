@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Base64 } from 'js-base64';
 import AuthorizationFlow from './components/AuthorizationFlow';
@@ -20,18 +20,27 @@ function App() {
   const clientSecret = 'secret';
   const redirectUri = 'http://localhost:3000/callback';
   const authorizationEndpoint = 'http://localhost:8085/oauth2/authorize';
+  // Use absolute URLs for AJAX calls. CORS is configured on the backend
+  // (AuthorizationServerConfig.corsConfigurationSource()) to allow localhost:3000.
+  // This avoids CRA proxy issues with cookie forwarding and response wrapping.
   const tokenEndpoint = 'http://localhost:8085/oauth2/token';
   const resourceEndpoint = 'http://localhost:8085/user';
 
   // Generate PKCE challenge
   const generatePKCE = () => {
-    const codeVerifier = Base64.fromUint8Array(crypto.getRandomValues(new Uint8Array(32))).slice(0, 43);
+    // Generate random bytes and convert to Base64URL (RFC 7636)
+    const base64UrlEncode = (buffer) => {
+      return Base64.fromUint8Array(new Uint8Array(buffer))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+    };
+    const codeVerifier = base64UrlEncode(crypto.getRandomValues(new Uint8Array(32)));
     const encoder = new TextEncoder();
     const data = encoder.encode(codeVerifier);
     return crypto.subtle.digest('SHA-256', data).then(hashBuffer => {
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashBase64 = Base64.fromUint8Array(new Uint8Array(hashArray)).slice(0, 43);
-      return { codeVerifier, codeChallenge: hashBase64 };
+      const codeChallenge = base64UrlEncode(hashBuffer);
+      return { codeVerifier, codeChallenge };
     });
   };
 
@@ -61,9 +70,18 @@ function App() {
     }
   };
 
+  // Prevent duplicate execution in React StrictMode (development mode double-invocation)
+  const tokenExchangeStarted = useRef(false);
+
   // Handle callback from authorization server
   useEffect(() => {
     const handleCallback = async () => {
+      // Guard: prevent duplicate execution from React StrictMode double-invocation
+      if (tokenExchangeStarted.current) {
+        return;
+      }
+      tokenExchangeStarted.current = true;
+
       const params = new URLSearchParams(window.location.search);
       const code = params.get('code');
 
@@ -104,7 +122,11 @@ function App() {
           // Decode principal from ID token or access token
           if (response.data.id_token) {
             const parts = response.data.id_token.split('.');
-            const payload = JSON.parse(Base64.toUint8Array(parts[1]));
+            // Use Base64.decode() which returns a string, NOT Base64.toUint8Array()
+            // which returns a Uint8Array. Passing a Uint8Array to JSON.parse() would
+            // cause it to call toString() on it, producing comma-separated byte numbers
+            // like "255,34,56,..." which is not valid JSON.
+            const payload = JSON.parse(Base64.decode(parts[1]));
             setPrincipal(payload);
           }
         } catch (err) {
@@ -188,4 +210,3 @@ function App() {
 }
 
 export default App;
-

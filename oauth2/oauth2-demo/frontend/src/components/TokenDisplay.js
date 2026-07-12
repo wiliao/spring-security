@@ -6,7 +6,11 @@ function TokenDisplay({ accessToken, idToken }) {
     try {
       const parts = token.split('.');
       if (parts.length !== 3) return null;
-      const payload = JSON.parse(Base64.toUint8Array(parts[1]));
+      // Use Base64.decode() which returns a string, not Base64.toUint8Array()
+      // which returns a Uint8Array. Passing a Uint8Array to JSON.parse() would
+      // cause it to call toString() on it, producing comma-separated byte numbers
+      // like "255,34,56,..." which is not valid JSON.
+      const payload = JSON.parse(Base64.decode(parts[1]));
       return payload;
     } catch (e) {
       return null;
@@ -80,4 +84,3 @@ function TokenDisplay({ accessToken, idToken }) {
 }
 
 export default TokenDisplay;
-
