@@ -10,20 +10,22 @@ Spring Security is a comprehensive authentication and authorization framework fo
 - **`spring-security-core`** (root dependency): Authentication, access control, provisioning APIs. Contains `SecurityContextHolder` (thread-local security context storage) and core authorization interfaces.
 - **`spring-security-web`** (depends on core): Servlet security filters, request matching, session management. Includes JavaScript resources synced from `spring-security-javascript` module.
 - **`spring-security-config`** (depends on web): XML schema-based configuration (`RNC → XSD` conversion) and `@Configuration` support.
+- **`spring-security-access`** (legacy, depends on core): **Spring Security 7 migration module** containing the old `AccessDecisionManager`, `AccessDecisionVoter`, `ConfigAttribute`, `AfterInvocationProvider` and related Access API previously in core. Located at `access/`. See migration docs in `docs/modules/ROOT/pages/migration/servlet/authorization.adoc`.
+- **`spring-security-data`** (depends on core): Spring Data integration with `SecurityEvaluationContextExtension`. Located at `data/`.
 
 ### Specialized Modules (Feature-Specific)
-- **`oauth2/*`** (4 sub-modules): Authorization server, resource server, client, JOSE. Each is independently testable.
+- **`oauth2/*`** (5 sub-modules): Authorization server, resource server, client, JOSE, core. Each is independently testable.
 - **`saml2/*`, `cas/`, `ldap/`, `kerberos/*`**: Protocol/integration-specific implementations. Follow same structural pattern.
 - **`messaging/`, `rsocket/`, `webauthn/`**: Additional technology integrations.
 
 ### Build Organization
-- **`buildSrc/`**: Custom Gradle plugins (conventions, versioning, checks)
+- **`buildSrc/`**: Custom Gradle plugins (conventions, versioning, checks). Includes `compile-warnings-error`, `javadoc-warnings-error`, `security-nullability`, `test-compile-target-jdk25`, `java-toolchain`, and `security-kotlin` convention plugins.
 - **`gradle/libs.versions.toml`**: Centralized dependency management (Gradle 7.4+ format)
-- **`itest/`**: Integration tests (organized by feature: web, ldap, oauth2, misc)
+- **`itest/`**: Integration tests (organized by feature: context, ldap, web, misc)
 
 ### Cross-Cutting Concerns
 - **`spring-security-test`**: Testing utilities (MockSecurityContextHolderStrategy, test annotations)
-- **`spring-security-crypto`**: Password encoding, encryption (dependency of core)
+- **`spring-security-crypto`**: Password encoding, encryption (dependency of core). Uses `com.password4j:password4j` as optional dependency.
 - **`docs/`**: Antora-based documentation with module-specific pages
 
 ## Critical Developer Workflows
@@ -55,7 +57,9 @@ Spring Security is a comprehensive authentication and authorization framework fo
 - **Formatting**: Enforced via io.spring.javaformat plugin (55-char subject lines in commits, 72-char line wrapping)
 - **Import Order**: Check manually (not enforced by format task) - follow Spring Framework conventions
 - **Streams vs. Loops**: `for` loops preferred over streams on hot paths (documented in CONTRIBUTING.adoc)
-- **Nullability**: All public APIs must have `@Nullable` or `@NonNull` annotations; plugin enforces this
+- **Nullability**: All public APIs must have `@Nullable` or `@NonNull` annotations; `security-nullability` plugin (`io.spring.nullability`) enforces this
+- **Java Toolchain**: Default toolchain is JDK 25; production code compiles to `--release 17`, test code to `--release 25` (due to Security Manager removal in JDK 25). Configured in `buildSrc/src/main/groovy/java-toolchain.gradle` and `test-compile-target-jdk25.gradle`.
+- **Compile Warnings**: Many modules apply `compile-warnings-error` plugin (`-Werror` for Java, `allWarningsAsErrors` for Kotlin) and `javadoc-warnings-error` plugin (`-Werror` for Javadoc).
 
 ### Contributing Workflow
 1. All commits require **DCO sign-off** (`-s` flag): `git commit -s "message"`
@@ -113,6 +117,10 @@ All modules build on Spring Framework 7.0+ (or Spring Boot 4.1+ compatible). Key
 - **LDAP**: UnboundID SDK (spring-security-ldap)
 - **SAML2**: OpenSAML5 library (spring-security-saml2)
 - **Kerberos**: JAAS (Java Authentication)
+- **WebAuthn**: `webauthn4j-core` library (spring-security-webauthn)
+
+### Jackson 2/3 Dual Support
+The project is migrating from Jackson 2 (`com.fasterxml.jackson`) to Jackson 3 (`tools.jackson`). Both BOMs are managed in `spring-security-dependencies`. Modules may declare optional dependencies on both coordinates. See `gradle/libs.versions.toml` for version definitions.
 
 ## Project Configuration Quirks & Conventions
 
@@ -121,6 +129,7 @@ All modules build on Spring Framework 7.0+ (or Spring Boot 4.1+ compatible). Key
 - **Circular dependency workaround**: Custom Eclipse plugin in build to handle Gradle cycles (see root build.gradle)
 - **Parallel & caching enabled**: `org.gradle.parallel=true`, `org.gradle.caching=true` in gradle.properties
 - **Heap configuration**: Set to 3GB by default; increase if running full build on limited memory
+- **Kotlin default dependency**: `kotlin.stdlib.default.dependency=false` in gradle.properties; Kotlin modules explicitly declare `kotlin-stdlib-jdk8` dependency
 
 ### Module Naming Convention
 Module directories must match their Gradle project name. Format: `:spring-security-modulename` → `modulename/` directory
@@ -134,6 +143,7 @@ But they're excluded from certain CI checks (format, checkstyle, checkFormat) wh
 ### Special Tasks
 - **`cloneRepository`**: Custom task for cloning external repositories (used for samples)
 - **`verifyDependenciesVersions`**: Checks all deps use versions from central `libs.versions.toml`
+- **`check-expected-branch-version`**: Validates branch naming conventions
 - **Develocity (Gradle Build Scans)**: Build scans enabled by default; consents to terms in build.gradle
 
 ## Common Pitfalls for AI Agents
@@ -141,21 +151,25 @@ But they're excluded from certain CI checks (format, checkstyle, checkFormat) wh
 1. **Forgetting format before changes**: Code won't pass CI. Always: `./gradlew format && ./gradlew check`
 2. **Assuming Maven structure**: This is Gradle. All dependency management is in `libs.versions.toml`, not POM files
 3. **Changing XSD directly**: Update RNC files instead, then run: `./gradlew :spring-security-config:rncToXsd`
-4. **Missing nullability annotations**: Public APIs require explicit `@Nullable` on parameters/returns
+4. **Missing nullability annotations**: Public APIs require explicit `@Nullable` or `@NonNull` on parameters/returns
 5. **Using streams on hot paths**: Hot path code must use `for` loops; document why if using streams
 6. **Forgetting copyright year updates**: Update in any edited file's header
 7. **Direct module dependency edits**: Edit `spring-security-modulename.gradle`, not root build.gradle
 8. **Ignoring integration tests**: Unit tests (`:test`) are fast; `:integrationTest` is separate and slower
 9. **oauth2-demo build failures**: This demo uses outdated Spring Boot (3.1.3) and is excluded from the root multi-module build. If updating plugin versions or Spring Security versions, note that `oauth2/oauth2-demo/build.gradle` requires separate version updates. See `oauth2/oauth2-demo/GRADLE_FIX_SUMMARY.md` for known issues and fixes.
+10. **Adding dependencies without checking Jackson 2/3 dual support**: Modules may need optional declarations for both `com.fasterxml.jackson.core:jackson-databind` AND `tools.jackson.core:jackson-databind` during the Jackson migration.
+11. **JDK 25 test compilation**: Tests compile with `--release 25` (not 17) because JDK 25 removed the Security Manager. Use `test-compile-target-jdk25` plugin if a module's tests call Security Manager APIs like `Subject.getSubject(AccessControlContext)`.
+12. **Compile/Javadoc warnings become errors**: The `compile-warnings-error` and `javadoc-warnings-error` plugins cause warnings to fail builds. Keep code clean of warnings.
 
 ## Key Files to Review
 
 - **`gradle/libs.versions.toml`**: Centralized versions for all dependencies
-- **`buildSrc/src/main/groovy/`**: Convention plugins (compilation, checking, formatting)
+- **`buildSrc/src/main/groovy/`**: Convention plugins (compilation, checking, formatting, nullability, toolchain)
 - **`docs/modules/ROOT/pages/servlet/architecture.adoc`**: Detailed security filter chain documentation
 - **`CONTRIBUTING.adoc`**: Comprehensive contribution requirements
 - **`*/src/main/java/org/springframework/security/*/`**: Each module's core packages
 - **`itest/*/src/test/java/`**: Integration test examples by feature
+- **`docs/modules/ROOT/pages/migration/`**: Migration guides for Spring Security 7 and 8
 
 ---
 
