@@ -88,10 +88,25 @@ public class AuthorizationServerConfig {
 			.clientSettings(ClientSettings.builder().requireAuthorizationConsent(true).build())
 			.build();
 
+		// Second client for Client Credentials Grant (machine-to-machine flow)
+		RegisteredClient ccClient = RegisteredClient.withId(UUID.randomUUID().toString())
+			.clientId("demo-cc-client")
+			.clientSecret(passwordEncoder.encode("cc-secret"))
+			.clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+			.clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
+			.authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+			.scope("api:read")
+			.scope("api:write")
+			.tokenSettings(TokenSettings.builder().accessTokenTimeToLive(Duration.ofHours(1)).build())
+			// No user involved in CC flow, so no consent needed
+			.clientSettings(ClientSettings.builder().requireAuthorizationConsent(false).build())
+			.build();
+
 		// Persist the RegisteredClient so it is available in the
 		// `oauth2_registered_client` table
 		JdbcRegisteredClientRepository repository = new JdbcRegisteredClientRepository(jdbcTemplate);
 		repository.save(registeredClient);
+		repository.save(ccClient);
 		return repository;
 	}
 
@@ -184,6 +199,7 @@ public class AuthorizationServerConfig {
 		source.registerCorsConfiguration("/oauth2/**", configuration);
 		source.registerCorsConfiguration("/.well-known/**", configuration);
 		source.registerCorsConfiguration("/user", configuration);
+		source.registerCorsConfiguration("/api/**", configuration);
 		return source;
 	}
 

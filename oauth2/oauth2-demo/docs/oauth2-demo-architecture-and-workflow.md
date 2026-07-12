@@ -24,23 +24,29 @@ The `oauth2-demo` module is a minimal, self-contained Spring Boot application th
 - OAuth2 Authorization Server endpoints (configured via Spring Authorization Server APIs)
   - OpenID Connect 1.0 enabled (required for `openid` scope)
   - Authorization endpoint: `/oauth2/authorize`
-  - Token endpoint: `/oauth2/token`
+  - Token endpoint: `/oauth2/token` (supports both `authorization_code` and `client_credentials` grant types)
   - JWK Set endpoint: `/oauth2/jwks`
   - H2 Console: `/h2-console` (for direct database inspection, registered programmatically)
 - OAuth2 Client (Spring Security OAuth2 Client) configured with a `ClientRegistration` pointing to the local Authorization Server
 - OAuth2 Resource Server (with JWT decoder) for protecting API endpoints accessed via Bearer tokens
 - CORS configured to allow the React frontend (`localhost:3000`) to make AJAX calls directly (no proxy required)
-- Resource endpoints exposed by the demo controller: `/`, `/user`, `/admin`
+- Resource endpoints exposed by the demo controller:
+  - `/`, `/user`, `/admin` — user-facing endpoints (Authorization Code flow)
+  - `/api/resource` — machine-to-machine endpoint (Client Credentials flow)
 - Database Viewer API endpoints:
   - `GET /db/clients` — list registered OAuth2 clients (JSON with lowercase column aliases)
   - `GET /db/authorizations` — list issued authorizations
   - `GET /db/consents` — list user consents
 - Embedded H2 database (in-memory) initialized with Spring Authorization Server schemas for RegisteredClient, Authorization, Consent tables
+- Two registered clients:
+  - `demo-client` — Authorization Code + PKCE (user-facing, scopes `openid`, `profile`)
+  - `demo-cc-client` — Client Credentials (machine-to-machine, scopes `api:read`, `api:write`)
 
 **Frontend (React on port `3000`):**
 - Standalone React SPA that communicates with the backend via HTTP (absolute URLs, not proxy)
 - Features:
   - OAuth2 Authorization Code flow with PKCE (automatic code challenge/verifier generation)
+  - Client Credentials Grant flow (machine-to-machine, direct token request via AJAX)
   - JWT token viewer with claim decoding
   - Protected resource access with Bearer token
   - Interactive database viewer (clients, authorizations, consents)
@@ -60,8 +66,9 @@ The `oauth2-demo` module is a minimal, self-contained Spring Boot application th
 - `frontend/` — standalone React application
 - `frontend/package.json` — React dependencies
 - `frontend/public/index.html` — HTML entry point
-- `frontend/src/App.js` — main OAuth2 flow orchestration
+- `frontend/src/App.js` — main OAuth2 flow orchestration (manages both Auth Code + PKCE and Client Credentials flows)
 - `frontend/src/components/AuthorizationFlow.js` — login initiation with PKCE support
+- `frontend/src/components/ClientCredentialsFlow.js` — Client Credentials Grant flow (token request + API call)
 - `frontend/src/components/TokenDisplay.js` — JWT token viewer and decoder
 - `frontend/src/components/ProtectedResource.js` — Bearer token resource caller
 - `frontend/src/components/DatabaseViewer.js` — database table viewer
@@ -70,6 +77,7 @@ The `oauth2-demo` module is a minimal, self-contained Spring Boot application th
 
 - The demo uses an embedded H2 database created at startup and initialized from the Spring Authorization Server SQL scripts (registered client, authorization, consent tables).
 - A sample `RegisteredClient` is inserted programmatically at startup (`clientId=demo-client`, `clientSecret=secret`) and stored in the DB via `JdbcRegisteredClientRepository`.
+- A second `RegisteredClient` for Client Credentials Grant is also seeded (`clientId=demo-cc-client`, `clientSecret=cc-secret`, scopes `api:read`, `api:write`).
 
 5) Runtime wiring details
 
@@ -152,7 +160,7 @@ Open `http://localhost:3000` in your browser to access the full interactive demo
    - **Call Protected Resource**: Click to call `/user` endpoint with Bearer token authentication
    - **View Database**: Inspect registered clients, authorizations, and user consents in the "Database" tab
 
-**Manual Testing (backend only):**
+**Manual Testing — Authorization Code Flow (backend only):**
 
 1. Open a browser and navigate to:
 
@@ -170,6 +178,29 @@ Open `http://localhost:3000` in your browser to access the full interactive demo
 4. After successful login and exchange, you will be redirected back and a session will be established. Visit:
 
    - http://localhost:8085/user — should show a greeting with the principal name.
+
+**Manual Testing — Client Credentials Grant (via curl):**
+
+The Client Credentials flow is machine-to-machine, so no browser interaction is needed.
+
+1. Request an access token for `demo-cc-client`:
+
+   ```bash
+   curl -X POST http://localhost:8085/oauth2/token \
+     -H "Authorization: Basic $(echo -n demo-cc-client:cc-secret | base64)" \
+     -H "Content-Type: application/x-www-form-urlencoded" \
+     -d "grant_type=client_credentials&scope=api:read"
+   ```
+
+   Response includes an `access_token`, `token_type`, `expires_in`, and `scope`.
+
+2. Use the token to call the protected API resource:
+
+   ```bash
+   curl -H "Authorization: Bearer <access_token>" http://localhost:8085/api/resource
+   ```
+
+   Response: `{"message":"This is a machine-to-machine protected resource.","client":"demo-cc-client","timestamp":"..."}`
 
 **Testing API with Bearer Token (via curl):**
 
@@ -238,7 +269,7 @@ The following enhancements have been implemented:
 - Interactive database viewer in the React UI
 
 ✅ **CORS Configuration for React Frontend**
-- `CorsConfigurationSource` bean allows `http://localhost:3000` on `/oauth2/**`, `/.well-known/**`, `/user`
+- `CorsConfigurationSource` bean allows `http://localhost:3000` on `/oauth2/**`, `/.well-known/**`, `/user`, `/api/**`
 - CORS enabled on both Authorization Server and default security filter chains
 - React frontend uses absolute URLs (no proxy dependency)
 
@@ -250,6 +281,13 @@ The following enhancements have been implemented:
 - Default security chain validates Bearer tokens via `NimbusJwtDecoder`
 - `/user` and `/admin` endpoints accessible both via session and Bearer token
 
+✅ **Client Credentials Grant**
+- Second `RegisteredClient` (`demo-cc-client`, secret `cc-secret`) registered with `client_credentials` grant type
+- Scopes `api:read` and `api:write` for machine-to-machine access
+- `/api/resource` endpoint returning JSON with client identity
+- React `ClientCredentialsFlow` component demonstrating token request + API call
+- curl-friendly for server-to-server testing without a browser
+
 ✅ **Standalone Frontend Setup**
 - Complete React SPA in `frontend/` directory
 - Quick start: `cd frontend && npm install && npm start`
@@ -257,6 +295,7 @@ The following enhancements have been implemented:
 
 ✅ **Complete ReactJS Frontend**
 - OAuth2 Authorization Code flow with PKCE support (S256 code challenge)
+- Client Credentials Grant flow (direct token request via AJAX)
 - JWT token decoder with claim visualization
 - Protected resource access with Bearer token authentication
 - Database table viewer (clients, authorizations, consents)
@@ -294,8 +333,8 @@ Key bootstrap steps and where they happen
 - `JdbcRegisteredClientRepository` is created and a sample `RegisteredClient` (the demo client) is saved at startup in `AuthorizationServerConfig.registeredClientRepository(...)`.
 - `JdbcOAuth2AuthorizationService` and `JdbcOAuth2AuthorizationConsentService` are wired to persist runtime authorizations and consents.
 
-3) RegisteredClient seed (demo client)
-- The demo creates and persists a `RegisteredClient` with these properties:
+3) RegisteredClient seeds (two demo clients)
+- **`demo-client`** (Authorization Code + PKCE):
   - `clientId="demo-client"`, `clientSecret="secret"` (encoded via the configured `PasswordEncoder`)
   - Client authentication methods: `CLIENT_SECRET_BASIC` and `CLIENT_SECRET_POST`
   - Grant types: `authorization_code` and `refresh_token`
@@ -303,6 +342,14 @@ Key bootstrap steps and where they happen
   - Scopes: `openid` and `profile`
   - `requireAuthorizationConsent=true`
   - Access token TTL: 1 hour (`TokenSettings`)
+- **`demo-cc-client`** (Client Credentials Grant):
+  - `clientId="demo-cc-client"`, `clientSecret="cc-secret"` (BCrypt encoded)
+  - Client authentication methods: `CLIENT_SECRET_BASIC` and `CLIENT_SECRET_POST`
+  - Grant type: `client_credentials` only
+  - Scopes: `api:read` and `api:write`
+  - `requireAuthorizationConsent=false` (no user involved)
+  - Access token TTL: 1 hour (`TokenSettings`)
+  - No redirect URIs (not needed for machine-to-machine)
 
 4) JWK generation and exposure
 - `AuthorizationServerConfig.jwkSource()` generates an RSA key pair (2048 bits) at startup, builds a Nimbus `RSAKey` and `JWKSet`, and exposes a `JWKSource<SecurityContext>` used by the Authorization Server to serve `/oauth2/jwks`. Tokens issued by the server are signed with this key.
@@ -343,19 +390,22 @@ Bootstrap (startup) sequence (conceptual)
 11. The server becomes available at `http://localhost:8085` with working Authorization Server endpoints (including OIDC discovery), the H2 console at `/h2-console` (via programmatic servlet registration), CORS-enabled endpoints for the React frontend, and Bearer token authentication via the resource server.
 
 Useful pointers and values
-- Demo RegisteredClient values: `clientId=demo-client`, `clientSecret=secret` (BCrypt encoded), scopes `openid,profile`, redirect URIs include `http://localhost:8085/login/oauth2/code/demo-client`, `http://localhost:8085/authorized`, and `http://localhost:3000/callback`. Client auth methods: `CLIENT_SECRET_BASIC` and `CLIENT_SECRET_POST`.
+- **`demo-client`** (Auth Code + PKCE): `clientId=demo-client`, `clientSecret=secret` (BCrypt encoded), scopes `openid,profile`, redirect URIs include `http://localhost:8085/login/oauth2/code/demo-client`, `http://localhost:8085/authorized`, and `http://localhost:3000/callback`. Client auth methods: `CLIENT_SECRET_BASIC` and `CLIENT_SECRET_POST`.
+- **`demo-cc-client`** (Client Credentials): `clientId=demo-cc-client`, `clientSecret=cc-secret` (BCrypt encoded), scopes `api:read,api:write`, no redirect URIs.
 - JWKSet URI: `http://localhost:8085/oauth2/jwks`
 - OIDC Discovery URL: `http://localhost:8085/.well-known/openid-configuration`
 - H2 console URL: `http://localhost:8085/h2-console` (default JDBC URL `jdbc:h2:mem:testdb`)
+- Protected API (machine-to-machine): `GET http://localhost:8085/api/resource`
 - CORS origins: `http://localhost:3000` (React frontend)
 - React frontend: `http://localhost:3000` with callback URI `http://localhost:3000/callback`
 
 Where to look in the code (quick links)
-- `oauth2-demo/src/main/java/sample/oauth2/demo/config/AuthorizationServerConfig.java` (DataSource, RegisteredClient seed, JWKSource, AuthorizationServerSettings, AuthorizationServerSecurityFilterChain with OIDC, CORS configuration)
+- `oauth2-demo/src/main/java/sample/oauth2/demo/config/AuthorizationServerConfig.java` (DataSource, RegisteredClient seeds for both `demo-client` and `demo-cc-client`, JWKSource, AuthorizationServerSettings, AuthorizationServerSecurityFilterChain with OIDC, CORS configuration)
 - `oauth2-demo/src/main/java/sample/oauth2/demo/config/SecurityConfig.java` (default security chain, OAuth2 Resource Server JWT, users, ClientRegistrationRepository, JwtDecoder, H2 Console servlet registration)
-- `oauth2-demo/src/main/java/sample/oauth2/demo/OAuth2DemoApplication.java` (Spring Boot entry point)
+- `oauth2-demo/src/main/java/sample/oauth2/demo/web/DemoController.java` (endpoints: `/`, `/user`, `/admin`, `/api/resource`)
 - `oauth2-demo/src/main/java/sample/oauth2/demo/web/DatabaseViewerController.java` (DB viewer endpoints with lowercase column aliases)
-- `oauth2-demo/frontend/src/App.js` (React SPA: PKCE generation, token exchange, session management, JWT decoding)
+- `oauth2-demo/frontend/src/App.js` (React SPA: PKCE generation, token exchange, session management, JWT decoding, Client Credentials tab)
+- `oauth2-demo/frontend/src/components/ClientCredentialsFlow.js` (React component: Client Credentials token request + API call)
 
 If you'd like, I can add inline comments in the source files that call out these bootstrap steps, or create a small architecture diagram (SVG/PNG) and embed it in this docs page.
 

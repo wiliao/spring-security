@@ -35,7 +35,7 @@ public class SecurityConfig {
 		// This chain also enables form login and oauth2Login for the demo UI.
 		http.authorizeHttpRequests(auth -> auth
 			.requestMatchers("/", "/error", "/webjars/**", "/login/**", "/oauth2/**", "/.well-known/**",
-					"/h2-console/**", "/db/**")
+					"/h2-console/**", "/db/**", "/api/**")
 			.permitAll()
 			.anyRequest()
 			.authenticated())
@@ -45,7 +45,8 @@ public class SecurityConfig {
 			// with a Bearer token (e.g. from the React frontend's ProtectedResource
 			// tab) are authenticated via the existing JwtDecoder bean.
 			.oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
-			// Enable CORS so the React frontend (localhost:3000) can access protected resources
+			// Enable CORS so the React frontend (localhost:3000) can access protected
+			// resources
 			.cors(Customizer.withDefaults());
 
 		http.csrf(csrf -> csrf.ignoringRequestMatchers("/h2-console/**"));

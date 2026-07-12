@@ -5,6 +5,7 @@ import AuthorizationFlow from './components/AuthorizationFlow';
 import TokenDisplay from './components/TokenDisplay';
 import ProtectedResource from './components/ProtectedResource';
 import DatabaseViewer from './components/DatabaseViewer';
+import ClientCredentialsFlow from './components/ClientCredentialsFlow';
 import './App.css';
 
 function App() {
@@ -151,7 +152,7 @@ function App() {
   return (
     <div className="app">
       <header className="header">
-        <h1>OAuth2 Demo — Authorization Code + PKCE Flow</h1>
+        <h1>OAuth2 Demo — Authorization Code + PKCE &amp; Client Credentials</h1>
         {accessToken && (
           <div className="logged-in-info">
             <span>Logged in as: {principal?.name || principal?.sub || 'User'}</span>
@@ -167,7 +168,11 @@ function App() {
       )}
 
       {!accessToken ? (
-        <AuthorizationFlow onLogin={handleLogin} />
+        <div className="main-content">
+          <AuthorizationFlow onLogin={handleLogin} />
+          <hr style={{ margin: '40px 0', border: 'none', borderTop: '2px dashed #ddd' }} />
+          <ClientCredentialsFlow />
+        </div>
       ) : (
         <div className="tabs">
           <div className="tab-buttons">
@@ -189,20 +194,28 @@ function App() {
             >
               Database
             </button>
+            <button
+              className={`tab-btn ${activeTab === 'client-credentials' ? 'active' : ''}`}
+              onClick={() => setActiveTab('client-credentials')}
+            >
+              Client Credentials
+            </button>
           </div>
 
           <div className="tab-content">
             {activeTab === 'tokens' && <TokenDisplay accessToken={accessToken} idToken={idToken} />}
             {activeTab === 'resources' && <ProtectedResource accessToken={accessToken} resourceEndpoint={resourceEndpoint} />}
             {activeTab === 'database' && <DatabaseViewer />}
+            {activeTab === 'client-credentials' && <ClientCredentialsFlow />}
           </div>
         </div>
       )}
 
       <footer className="footer">
         <p>
-          This demo showcases the Authorization Code + PKCE flow.
-          See <code>/h2-console</code> for the H2 database console (JDBC URL: <code>jdbc:h2:mem:testdb</code>).
+          This demo showcases both the Authorization Code + PKCE flow and
+          the Client Credentials grant. See <code>/h2-console</code> for the
+          H2 database console (JDBC URL: <code>jdbc:h2:mem:testdb</code>).
         </p>
       </footer>
     </div>
