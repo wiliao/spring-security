@@ -12,6 +12,8 @@ Spring Security is a comprehensive authentication and authorization framework fo
 - **`spring-security-config`** (depends on web): XML schema-based configuration (`RNC → XSD` conversion) and `@Configuration` support.
 - **`spring-security-access`** (legacy, depends on core): **Spring Security 7 migration module** containing the old `AccessDecisionManager`, `AccessDecisionVoter`, `ConfigAttribute`, `AfterInvocationProvider` and related Access API previously in core. Located at `access/`. See migration docs in `docs/modules/ROOT/pages/migration/servlet/authorization.adoc`.
 - **`spring-security-data`** (depends on core): Spring Data integration with `SecurityEvaluationContextExtension`. Located at `data/`.
+- **`dependencies/`** (`spring-security-dependencies`): **Build infrastructure** — a `java-platform` project that centrally manages all dependency BOMs (Spring Framework, Reactor, Jackson 2/3, JUnit, etc.) and ~50 individual library constraints. Located at `dependencies/`.
+- **`bom/`** (`spring-security-bom`): **Build infrastructure** — aggregates all `SpringModulePlugin` projects into a BOM for downstream consumers. Located at `bom/`.
 
 ### Specialized Modules (Feature-Specific)
 - **`oauth2/*`** (5 sub-modules): Authorization server, resource server, client, JOSE, core. Each is independently testable.
@@ -19,7 +21,9 @@ Spring Security is a comprehensive authentication and authorization framework fo
 - **`messaging/`, `rsocket/`, `webauthn/`**: Additional technology integrations.
 
 ### Build Organization
-- **`buildSrc/`**: Custom Gradle plugins (conventions, versioning, checks). Includes `compile-warnings-error`, `javadoc-warnings-error`, `security-nullability`, `test-compile-target-jdk25`, `java-toolchain`, and `security-kotlin` convention plugins.
+- **`buildSrc/`**: Custom Gradle plugins (conventions, versioning, checks). Includes `compile-warnings-error`, `javadoc-warnings-error`, `security-nullability`, `test-compile-target-jdk25`, `java-toolchain`, and `security-kotlin` convention plugins. Also registers 6 additional plugins: `trang` (RNC→XSD), `locks` (GlobalLockPlugin), `io.spring.convention.management-configuration`, `s101`, `verify-dependencies-versions`, and `check-expected-branch-version`.
+- **`dependencies/`** (`spring-security-dependencies`): java-platform aggregator for all BOMs (Spring, Reactor, Jackson 2/3, JUnit, Mockito, Kotlin) and library constraints. Located at `dependencies/spring-security-dependencies.gradle`.
+- **`bom/`** (`spring-security-bom`): Bill of Materials aggregating all `SpringModulePlugin` projects for downstream consumers. Located at `bom/spring-security-bom.gradle`.
 - **`gradle/libs.versions.toml`**: Centralized dependency management (Gradle 7.4+ format)
 - **`itest/`**: Integration tests (organized by feature: context, ldap, web, misc)
 
@@ -125,11 +129,13 @@ The project is migrating from Jackson 2 (`com.fasterxml.jackson`) to Jackson 3 (
 ## Project Configuration Quirks & Conventions
 
 ### Gradle Peculiarities
-- **Dynamic module loading**: `settings.gradle` auto-discovers all `*/build.gradle` files and registers projects
+- **Dynamic module loading**: `settings.gradle` auto-discovers all `*/build.gradle` and `*.gradle.kts` files and registers projects. Excludes `build`, `**/gradle`, `settings.gradle`, `buildSrc`, `/build.gradle`, `.*`, `out`, and `**/grails3`. Also supports an `excludeProjects` project property override.
 - **Circular dependency workaround**: Custom Eclipse plugin in build to handle Gradle cycles (see root build.gradle)
 - **Parallel & caching enabled**: `org.gradle.parallel=true`, `org.gradle.caching=true` in gradle.properties
-- **Heap configuration**: Set to 3GB by default; increase if running full build on limited memory
+- **Heap configuration**: Set to 3GB by default (`-Xmx3g`); increase if running full build on limited memory
 - **Kotlin default dependency**: `kotlin.stdlib.default.dependency=false` in gradle.properties; Kotlin modules explicitly declare `kotlin-stdlib-jdk8` dependency
+- **Gradle Wrapper Upgrade**: Configured via `org.gradle.wrapper-upgrade` plugin with `baseBranch = '6.3.x'` (updates on 6.3.x, merged forward to main)
+- **Project version**: `version=7.1.1-SNAPSHOT`, `springBootVersion=4.1.0-SNAPSHOT` in `gradle.properties`
 
 ### Module Naming Convention
 Module directories must match their Gradle project name. Format: `:spring-security-modulename` → `modulename/` directory
@@ -145,6 +151,8 @@ But they're excluded from certain CI checks (format, checkstyle, checkFormat) wh
 - **`verifyDependenciesVersions`**: Checks all deps use versions from central `libs.versions.toml`
 - **`check-expected-branch-version`**: Validates branch naming conventions
 - **Develocity (Gradle Build Scans)**: Build scans enabled by default; consents to terms in build.gradle
+- **`springRelease`**: Configured in root `build.gradle` with release cadence (3rd week, Mondays), reference doc and API doc URLs
+- **`wrapperUpgrade`**: Gradle wrapper auto-upgrade via `org.gradle.wrapper-upgrade` plugin targeting `6.3.x` base branch
 
 ## Common Pitfalls for AI Agents
 
@@ -164,12 +172,16 @@ But they're excluded from certain CI checks (format, checkstyle, checkFormat) wh
 ## Key Files to Review
 
 - **`gradle/libs.versions.toml`**: Centralized versions for all dependencies
+- **`gradle.properties`**: Project version (`7.1.1-SNAPSHOT`), `springBootVersion`, build JVM args, parallelism settings
+- **`buildSrc/build.gradle`**: Plugin registrations for `trang`, `locks`, `s101`, `verify-dependencies-versions`, `check-expected-branch-version`
 - **`buildSrc/src/main/groovy/`**: Convention plugins (compilation, checking, formatting, nullability, toolchain)
+- **`dependencies/spring-security-dependencies.gradle`**: java-platform BOM aggregator (Spring, Reactor, Jackson 2/3, JUnit, Mockito, Kotlin + constraints)
+- **`bom/spring-security-bom.gradle`**: BOM aggregating all `SpringModulePlugin` projects for downstream consumers
 - **`docs/modules/ROOT/pages/servlet/architecture.adoc`**: Detailed security filter chain documentation
 - **`CONTRIBUTING.adoc`**: Comprehensive contribution requirements
 - **`*/src/main/java/org/springframework/security/*/`**: Each module's core packages
 - **`itest/*/src/test/java/`**: Integration test examples by feature
-- **`docs/modules/ROOT/pages/migration/`**: Migration guides for Spring Security 7 and 8
+- **`docs/modules/ROOT/pages/migration/`**: Migration guides for Spring Security 7 and 8 (servlet/, reactive.adoc, index.adoc)
 
 ---
 
